@@ -2,8 +2,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:vocare/page/laporan/report.dart';
 
-enum VoiceState { initial, listening, processing, result }
+enum VoiceState { initial, listening, processing }
 
 class VoicePage extends StatefulWidget {
   const VoicePage({super.key});
@@ -135,7 +136,6 @@ class _VoicePageState extends State<VoicePage>
             _state = VoiceState.initial;
             _statusText = 'error';
           });
-          // hentikan animasi kalau ada error
           try {
             _animController.stop();
           } catch (_) {}
@@ -167,7 +167,6 @@ class _VoicePageState extends State<VoicePage>
     }
   }
 
-  /// Start or stop listening.
   Future<void> _listenOrStop() async {
     if (!_speechEnabled) {
       safeSetState(() {
@@ -190,7 +189,6 @@ class _VoicePageState extends State<VoicePage>
     }
 
     if (!_isListening) {
-      // START listening: naikkan session token
       _session++;
       final int localSession = _session;
 
@@ -237,17 +235,26 @@ class _VoicePageState extends State<VoicePage>
             await Future.delayed(const Duration(seconds: 1));
             if (!mounted) return;
 
+            final toShow = finalTranscript.isNotEmpty
+                ? finalTranscript
+                : 'Tidak ada teks yang dikenali.';
+            if (!mounted) return;
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => VocareReport(reportText: toShow),
+              ),
+            );
+
             safeSetState(() {
-              _state = VoiceState.result;
+              _state = VoiceState.initial;
               _statusText = 'ready';
-              _text = finalTranscript.isNotEmpty
-                  ? finalTranscript
-                  : 'Tidak ada teks yang dikenali.';
+              _text = '';
+              _isListening = false;
             });
           }
         },
         localeId: 'id-ID',
-        listenFor: const Duration(seconds: 120),
+        listenFor: const Duration(seconds: 900),
         pauseFor: const Duration(seconds: 8),
         partialResults: true,
         cancelOnError: true,
@@ -277,12 +284,22 @@ class _VoicePageState extends State<VoicePage>
       await Future.delayed(const Duration(milliseconds: 800));
       if (!mounted) return;
 
+      final toShow = captured.isNotEmpty
+          ? captured
+          : 'Tidak ada teks yang dikenali.';
+
+      // navigasi ke report
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => VocareReport(reportText: toShow)),
+      );
+
+      // kembali ke state awal pada halaman voice
       safeSetState(() {
-        _state = VoiceState.result;
+        _state = VoiceState.initial;
         _statusText = 'ready';
-        _text = captured.isNotEmpty
-            ? captured
-            : 'Tidak ada teks yang dikenali.';
+        _text = '';
+        _isListening = false;
       });
     }
   }
@@ -342,9 +359,8 @@ class _VoicePageState extends State<VoicePage>
         return AnimatedBuilder(
           animation: _animController,
           builder: (context, child) {
-            final v = _animController.value; // 0.0 - 1.0
+            final v = _animController.value;
 
-            // 5 phased waves evenly spread around the circle
             final double phase1 = 0.0;
             final double phase2 = 2 * math.pi / 5;
             final double phase3 = 4 * math.pi / 5;
@@ -354,9 +370,8 @@ class _VoicePageState extends State<VoicePage>
             double amp(double phase) =>
                 0.5 + 0.5 * math.sin(2 * math.pi * v + phase);
 
-            // Tinggikan di sini
             const double baseHeight = 18.0;
-            const double extraHeight = 80.0; // naikkan untuk bar lebih tinggi
+            const double extraHeight = 80.0;
 
             final h1 = baseHeight + amp(phase1) * extraHeight;
             final h2 = baseHeight + amp(phase2) * extraHeight;
@@ -369,7 +384,7 @@ class _VoicePageState extends State<VoicePage>
               children: [
                 const SizedBox(height: 12),
                 SizedBox(
-                  height: baseHeight + extraHeight + 8, 
+                  height: baseHeight + extraHeight + 8,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -429,40 +444,6 @@ class _VoicePageState extends State<VoicePage>
                 fontWeight: FontWeight.w700,
                 fontSize: 16,
                 color: Color(0xFF093275),
-              ),
-            ),
-          ],
-        );
-
-      case VoiceState.result:
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Text(
-                _text,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 20,
-                  color: Color(0xFF093275),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: () {
-                safeSetState(() {
-                  _state = VoiceState.initial;
-                  _text = '';
-                  _isListening = false;
-                });
-              },
-              icon: const Icon(Icons.replay),
-              label: const Text('Record Again'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF093275),
               ),
             ),
           ],
