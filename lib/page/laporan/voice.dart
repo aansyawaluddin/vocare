@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -10,18 +11,18 @@ class VoicePage extends StatefulWidget {
   State<VoicePage> createState() => _VoicePageState();
 }
 
-class _VoicePageState extends State<VoicePage> {
+class _VoicePageState extends State<VoicePage>
+    with SingleTickerProviderStateMixin {
   final SpeechToText _speech = SpeechToText();
   bool _speechEnabled = false;
   bool _isListening = false;
   String _text = '';
   String _statusText = '';
   VoiceState _state = VoiceState.initial;
-
-  // session token untuk menghindari pemrosesan ganda
   int _session = 0;
 
-  // Helper aman untuk setState
+  late final AnimationController _animController;
+
   void safeSetState(VoidCallback fn) {
     if (!mounted) return;
     setState(fn);
@@ -30,6 +31,10 @@ class _VoicePageState extends State<VoicePage> {
   @override
   void initState() {
     super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
     _initSpeech();
   }
 
@@ -100,10 +105,17 @@ class _VoicePageState extends State<VoicePage> {
             _statusText = status;
             if (status == 'listening') {
               _isListening = true;
+              try {
+                _animController.repeat();
+              } catch (_) {}
             } else if (status == 'notListening' ||
                 status == 'done' ||
                 status == 'stopped') {
               _isListening = false;
+              // hentikan animasi
+              try {
+                _animController.stop();
+              } catch (_) {}
             }
           });
         },
@@ -123,6 +135,10 @@ class _VoicePageState extends State<VoicePage> {
             _state = VoiceState.initial;
             _statusText = 'error';
           });
+          // hentikan animasi kalau ada error
+          try {
+            _animController.stop();
+          } catch (_) {}
         },
       );
 
@@ -185,25 +201,29 @@ class _VoicePageState extends State<VoicePage> {
         _text = '';
       });
 
+      // mulai animasi visualizer
+      try {
+        _animController.repeat();
+      } catch (_) {}
+
       _speech.listen(
         onResult: (result) async {
-          // jika session sudah invalid, abaikan semua callback
           if (localSession != _session) return;
-
-          // update interim text dengan aman
           safeSetState(() {
             _text = result.recognizedWords;
           });
-
-          // ketika final result -> processing -> result (proses sekali)
           if (result.finalResult == true) {
-            // immediate invalidate the session to prevent duplicates
             if (localSession != _session) return;
-            _session++; // invalidate any subsequent callbacks from previous session
+            _session++;
 
             final finalTranscript = result.recognizedWords;
             try {
               await _speech.stop();
+            } catch (_) {}
+
+            // hentikan animasi saat proses
+            try {
+              _animController.stop();
             } catch (_) {}
 
             safeSetState(() {
@@ -233,10 +253,9 @@ class _VoicePageState extends State<VoicePage> {
         cancelOnError: true,
       );
     } else {
-      // STOP listening manual:
-      // invalidate session first to ignore callbacks that may come after stop
+      // STOP listening (manual stop)
       _session++;
-      final captured = _text; // interim text saat stop
+      final captured = _text;
 
       safeSetState(() {
         _isListening = false;
@@ -244,6 +263,11 @@ class _VoicePageState extends State<VoicePage> {
         _statusText = 'processing';
         _text = 'Memproses hasil...';
       });
+
+      // hentikan animasi saat memproses hasil
+      try {
+        _animController.stop();
+      } catch (_) {}
 
       try {
         await _speech.stop();
@@ -265,13 +289,13 @@ class _VoicePageState extends State<VoicePage> {
 
   @override
   void dispose() {
-    // hentikan speech dan batalkan callback secepat mungkin
     try {
       _speech.cancel();
     } catch (_) {}
     try {
       _speech.stop();
     } catch (_) {}
+    _animController.dispose();
     super.dispose();
   }
 
@@ -315,33 +339,78 @@ class _VoicePageState extends State<VoicePage> {
         );
 
       case VoiceState.listening:
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.graphic_eq, size: 120, color: Color(0xFF093275)),
-            const SizedBox(height: 24),
-            const Text(
-              'Mendengarkan...',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 18,
-                color: Color(0xFF093275),
-              ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _listenOrStop,
-              icon: const Icon(Icons.stop),
-              label: const Text('Stop'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
+        return AnimatedBuilder(
+          animation: _animController,
+          builder: (context, child) {
+            final v = _animController.value; // 0.0 - 1.0
+
+            // 5 phased waves evenly spread around the circle
+            final double phase1 = 0.0;
+            final double phase2 = 2 * math.pi / 5;
+            final double phase3 = 4 * math.pi / 5;
+            final double phase4 = 6 * math.pi / 5;
+            final double phase5 = 8 * math.pi / 5;
+
+            double amp(double phase) =>
+                0.5 + 0.5 * math.sin(2 * math.pi * v + phase);
+
+            // Tinggikan di sini
+            const double baseHeight = 18.0;
+            const double extraHeight = 80.0; // naikkan untuk bar lebih tinggi
+
+            final h1 = baseHeight + amp(phase1) * extraHeight;
+            final h2 = baseHeight + amp(phase2) * extraHeight;
+            final h3 = baseHeight + amp(phase3) * extraHeight;
+            final h4 = baseHeight + amp(phase4) * extraHeight;
+            final h5 = baseHeight + amp(phase5) * extraHeight;
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: baseHeight + extraHeight + 8, 
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildBar(h1),
+                      const SizedBox(width: 8),
+                      _buildBar(h2),
+                      const SizedBox(width: 8),
+                      _buildBar(h3),
+                      const SizedBox(width: 8),
+                      _buildBar(h4),
+                      const SizedBox(width: 8),
+                      _buildBar(h5),
+                    ],
+                  ),
                 ),
-              ),
-            ),
-          ],
+                const SizedBox(height: 16),
+                const Text(
+                  'Mendengarkan...',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 18,
+                    color: Color(0xFF093275),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: _listenOrStop,
+                  icon: const Icon(Icons.stop),
+                  label: const Text('Stop'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         );
 
       case VoiceState.processing:
@@ -386,6 +455,8 @@ class _VoicePageState extends State<VoicePage> {
               onPressed: () {
                 safeSetState(() {
                   _state = VoiceState.initial;
+                  _text = '';
+                  _isListening = false;
                 });
               },
               icon: const Icon(Icons.replay),
@@ -397,6 +468,18 @@ class _VoicePageState extends State<VoicePage> {
           ],
         );
     }
+  }
+
+  // helper builder untuk satu bar kecil
+  Widget _buildBar(double height) {
+    return Container(
+      width: 10,
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFF093275),
+        borderRadius: BorderRadius.circular(4),
+      ),
+    );
   }
 
   @override
