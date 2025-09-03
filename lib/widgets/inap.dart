@@ -68,6 +68,7 @@ class _PasienInapWidgetState extends State<PasienInapWidget> {
               onChanged: (v) => setState(() => _selectedRoom = v),
               isExpanded: true,
               icon: const Icon(Icons.expand_more),
+              dropdownColor: Colors.white,
             ),
           ),
         ),
@@ -145,7 +146,7 @@ class InpatientCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 58,
+          width: 50,
           height: cardHeight,
           decoration: BoxDecoration(
             color: navy,
@@ -159,7 +160,6 @@ class InpatientCard extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 12),
         Expanded(
           child: ClipPath(
             clipper: RightArrowClipper(),
@@ -193,7 +193,6 @@ class InpatientCard extends StatelessWidget {
                       fontSize: isCompact ? 11 : 12,
                     ),
                   ),
-                  const Spacer(),
                   Text(
                     'Tindakan Sebelumnya : $lastAction',
                     style: TextStyle(
@@ -201,7 +200,6 @@ class InpatientCard extends StatelessWidget {
                       fontSize: isCompact ? 11 : 12,
                     ),
                   ),
-                  
                 ],
               ),
             ),
