@@ -77,7 +77,7 @@ class ReportCard extends StatelessWidget {
             child: Icon(Icons.article_outlined, color: Colors.white, size: 28),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 0),
         Expanded(
           child: ClipPath(
             clipper: RightArrowClipper(),

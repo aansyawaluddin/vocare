@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:vocare/page/voice.dart';
+import 'package:vocare/page/laporan/voice.dart';
 import 'package:vocare/widgets/inap.dart';
 import 'package:vocare/widgets/laporan.dart';
 
