@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:vocare/page/laporan/voice.dart';
+import 'package:vocare/page/perawat/laporan/voice.dart';
 import 'package:vocare/widgets/inap.dart';
 import 'package:vocare/widgets/laporan.dart';
 
@@ -11,7 +11,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _selectedTab = 0; // 0 = Laporan, 1 = Pasien inap
+  int _selectedTab = 0;
 
   final List<String> rooms = [
     'Semua Ruangan',
@@ -241,7 +241,7 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
 
-      bottomNavigationBar: SafeArea(
+      bottomNavigationBar: _selectedTab == 0 ? SafeArea(
         minimum: const EdgeInsets.fromLTRB(24, 8, 24, 18),
         child: Padding(
           padding: const EdgeInsets.only(top: 6.0),
@@ -278,7 +278,7 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ),
-      ),
+      ) : null,
     );
   }
 }

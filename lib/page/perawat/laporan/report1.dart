@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:vocare/page/perawat/laporan/report2.dart';
 
 class VocareReport extends StatelessWidget {
   final String reportText;
@@ -108,16 +109,13 @@ class VocareReport extends StatelessWidget {
                       height: 56,
                       child: ElevatedButton(
                         onPressed: () {
-                          // aksi Next
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => VocareReport2(reportText: reportText),
+                            ),
+                          );
                         },
-                        child: const Text(
-                          'Next',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                            color: Colors.white,
-                          ),
-                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: darkButtonBlue,
                           foregroundColor: Colors.white,
@@ -125,6 +123,14 @@ class VocareReport extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           elevation: 0,
+                        ),
+                        child: const Text(
+                          'Next',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),

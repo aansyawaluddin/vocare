@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:vocare/page/laporan/report.dart';
+import 'package:vocare/page/perawat/laporan/report1.dart';
 
 enum VoiceState { initial, listening, processing }
 
