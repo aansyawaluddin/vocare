@@ -1,9 +1,105 @@
 import 'package:flutter/material.dart';
 import 'package:vocare/page/perawat/laporan/report2.dart';
 
-class VocareReport extends StatelessWidget {
+class VocareReport extends StatefulWidget {
   final String reportText;
   const VocareReport({super.key, required this.reportText});
+
+  @override
+  State<VocareReport> createState() => _VocareReportState();
+}
+
+class _VocareReportState extends State<VocareReport> {
+  late TextEditingController _controller;
+  late String _currentText;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentText = widget.reportText;
+    _controller = TextEditingController(text: _currentText);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _showEditSheet() {
+    showModalBottomSheet(
+      backgroundColor: Color(0xFFDFF0FF),
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 16,
+            right: 16,
+            top: 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Edit Laporan',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  color: Color(0xFF083B74),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _controller,
+                keyboardType: TextInputType.multiline,
+                maxLines: null,
+                minLines: 5,
+                decoration: InputDecoration(
+                  hintText: 'Masukkan teks laporan...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        // batal -> tutup sheet tanpa menyimpan
+                        Navigator.of(context).pop();
+                      },
+                      child: const Text('Batal'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        // simpan hasil edit
+                        setState(() {
+                          _currentText = _controller.text;
+                        });
+                        Navigator.of(context).pop();
+                      },
+                      child: const Text('Simpan'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +149,6 @@ class VocareReport extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Tampilkan Hasil Voice di bagian atas
                       const Text(
                         'Hasil Transkrip Voice:',
                         style: TextStyle(
@@ -63,7 +158,7 @@ class VocareReport extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        reportText,
+                        _currentText,
                         style: const TextStyle(height: 1.4, fontSize: 16),
                       ),
                       const SizedBox(height: 12),
@@ -81,9 +176,7 @@ class VocareReport extends StatelessWidget {
                     child: SizedBox(
                       height: 56,
                       child: ElevatedButton.icon(
-                        onPressed: () {
-                          // aksi Edit: misal kembali dan ubah teks, atau buka editor
-                        },
+                        onPressed: _showEditSheet,
                         icon: const Icon(Icons.edit, color: Colors.white),
                         label: const Text(
                           'Edit',
@@ -112,7 +205,8 @@ class VocareReport extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => VocareReport2(reportText: reportText),
+                              builder: (context) =>
+                                  VocareReport2(reportText: _currentText),
                             ),
                           );
                         },

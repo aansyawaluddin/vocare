@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:vocare/page/perawat/inap/detail_riwayat.dart';
 
 class PasienInapWidget extends StatefulWidget {
   const PasienInapWidget({
@@ -51,7 +52,6 @@ class _PasienInapWidgetState extends State<PasienInapWidget> {
           ),
         ),
         const SizedBox(height: 8),
-
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
@@ -72,7 +72,6 @@ class _PasienInapWidgetState extends State<PasienInapWidget> {
             ),
           ),
         ),
-
         const SizedBox(height: 18),
         Text(
           'Pasien Rawat Inap :',
@@ -83,7 +82,6 @@ class _PasienInapWidgetState extends State<PasienInapWidget> {
           ),
         ),
         const SizedBox(height: 12),
-
         if (visible.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24.0),
@@ -103,11 +101,22 @@ class _PasienInapWidgetState extends State<PasienInapWidget> {
                     child: InpatientCard(
                       navy: navy,
                       cardBlue: cardBlue,
-                      name: p['name']!,
-                      room: p['room']!,
-                      condition: p['condition']!,
-                      lastAction: p['lastAction']!,
+                      name: p['name'] ?? '-',
+                      room: p['room'] ?? '-',
+                      condition: p['condition'] ?? '-',
+                      lastAction: p['lastAction'] ?? '-',
                       isCompact: isCompact,
+                      onTap: () {
+                        // navigasi ke halaman detail, kirim data pasien
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => DetailRiwayatInap(
+                              reportText: p['reportText'] ?? '-',
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 )
@@ -128,6 +137,7 @@ class InpatientCard extends StatelessWidget {
     required this.condition,
     required this.lastAction,
     this.isCompact = false,
+    this.onTap,
   });
 
   final Color navy;
@@ -137,6 +147,7 @@ class InpatientCard extends StatelessWidget {
   final String condition;
   final String lastAction;
   final bool isCompact;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -160,47 +171,54 @@ class InpatientCard extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(width: 8),
         Expanded(
           child: ClipPath(
             clipper: RightArrowClipper(),
-            child: Container(
+            child: Material(
               color: cardBlue,
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-              height: cardHeight,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Nama : $name',
-                    style: TextStyle(
-                      color: navy,
-                      fontWeight: FontWeight.w700,
-                      fontSize: isCompact ? 12 : 13,
-                    ),
+              child: InkWell(
+                onTap: onTap,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                  height: cardHeight,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Nama : $name',
+                        style: TextStyle(
+                          color: navy,
+                          fontWeight: FontWeight.w700,
+                          fontSize: isCompact ? 12 : 13,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Kamar : $room',
+                        style: TextStyle(
+                          color: navy.withOpacity(0.95),
+                          fontSize: isCompact ? 11 : 12,
+                        ),
+                      ),
+                      Text(
+                        'Kondisi : $condition',
+                        style: TextStyle(
+                          color: navy.withOpacity(0.95),
+                          fontSize: isCompact ? 11 : 12,
+                        ),
+                      ),
+                      Text(
+                        'Tindakan Sebelumnya : $lastAction',
+                        style: TextStyle(
+                          color: navy.withOpacity(0.9),
+                          fontSize: isCompact ? 11 : 12,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Kamar : $room',
-                    style: TextStyle(
-                      color: navy.withOpacity(0.95),
-                      fontSize: isCompact ? 11 : 12,
-                    ),
-                  ),
-                  Text(
-                    'Kondisi : $condition',
-                    style: TextStyle(
-                      color: navy.withOpacity(0.95),
-                      fontSize: isCompact ? 11 : 12,
-                    ),
-                  ),
-                  Text(
-                    'Tindakan Sebelumnya : $lastAction',
-                    style: TextStyle(
-                      color: navy.withOpacity(0.9),
-                      fontSize: isCompact ? 11 : 12,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),

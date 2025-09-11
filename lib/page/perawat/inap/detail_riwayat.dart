@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
-class VocareReport2 extends StatelessWidget {
+class DetailRiwayatInap extends StatelessWidget {
   final String reportText;
-  const VocareReport2({super.key, required this.reportText});
+  const DetailRiwayatInap({super.key, required this.reportText});
 
   @override
   Widget build(BuildContext context) {
-    const background = Color.fromARGB(255, 223, 240, 255);
+    const background = Color(0xFFDFF0FF);
     const cardBorder = Color(0xFFCED7E8);
     const headingBlue = Color(0xFF0F4C81);
-    const buttonSave = Color(0xFF009563);
+    const buttonTambah = Color(0xFF093275);
 
     Widget section(String title) {
       return Container(
@@ -59,29 +59,13 @@ class VocareReport2 extends StatelessWidget {
             fontSize: 18,
           ),
         ),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(color: background),
-        ),
       ),
-      // Gunakan ListView agar seluruh isi bisa discroll
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20.0),
           child: ListView(
             padding: const EdgeInsets.only(bottom: 18, top: 10),
-            children: [
-              section('Pengkajian'),
-              const SizedBox(height: 10),
-              section('Diagnosa Keperawatan (SDKI)'),
-              const SizedBox(height: 10),
-              section('Luaran Keperawatan (SLKI)'),
-              const SizedBox(height: 10),
-              section('Intervensi Keperawatan (SIKI)'),
-              const SizedBox(height: 10),
-              section('Catatan Tambahan'),
-              const SizedBox(height: 12),
-              // Spacer tidak lagi diperlukan di ListView
-            ],
+            children: [section('29/08/2025 14:30'), const SizedBox(height: 10)],
           ),
         ),
       ),
@@ -96,13 +80,13 @@ class VocareReport2 extends StatelessWidget {
               onPressed: () {
                 // aksi save di sini
               },
-              icon: const Icon(Icons.save, color: Colors.white),
+              icon: const Icon(Icons.add, color: Colors.white),
               label: const Text(
-                'Save',
+                'Laporan Baru',
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: buttonSave,
+                backgroundColor: buttonTambah,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),

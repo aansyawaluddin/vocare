@@ -250,7 +250,7 @@ class _HomePageState extends State<HomePage> {
             child: ElevatedButton(
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => const VoicePage()),
+                  MaterialPageRoute(builder: (context) => const VoicePageLaporan()),
                 );
               },
               style: ElevatedButton.styleFrom(
