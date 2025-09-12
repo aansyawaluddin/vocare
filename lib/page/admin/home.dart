@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:vocare/page/perawat/laporan/voice.dart';
 import 'package:vocare/widgets/inap.dart';
-import 'package:vocare/widgets/laporan.dart';
+import 'package:vocare/widgets/pasien.dart';
 
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+class HomeAdminPage extends StatefulWidget {
+  const HomeAdminPage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<HomeAdminPage> createState() => _HomeAdminPageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomeAdminPageState extends State<HomeAdminPage> {
   int _selectedTab = 0;
 
   final List<String> rooms = [
@@ -23,7 +22,7 @@ class _HomePageState extends State<HomePage> {
 
   final List<Map<String, String>> reports = List.generate(
     5,
-    (index) => {'name': 'Budi Santoso', 'date': '30 Agustus 2025'},
+    (index) => {'perawat': 'Budi Santoso', 'kamar': 'Ruangan IGD'},
   );
 
   final List<Map<String, String>> inpatients = List.generate(6, (index) {
@@ -160,7 +159,7 @@ class _HomePageState extends State<HomePage> {
                                         ),
                                         child: Center(
                                           child: Text(
-                                            'Laporan',
+                                            'Perawat',
                                             style: TextStyle(
                                               color: _selectedTab == 0
                                                   ? navy
@@ -216,7 +215,7 @@ class _HomePageState extends State<HomePage> {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 18.0),
                         child: _selectedTab == 0
-                            ? LaporanWidget(
+                            ? PasienWidget(
                                 reports: reports,
                                 navy: navy,
                                 cardBlue: cardBlue,
@@ -240,45 +239,6 @@ class _HomePageState extends State<HomePage> {
           },
         ),
       ),
-
-      bottomNavigationBar: _selectedTab == 0 ? SafeArea(
-        minimum: const EdgeInsets.fromLTRB(24, 8, 24, 18),
-        child: Padding(
-          padding: const EdgeInsets.only(top: 6.0),
-          child: SizedBox(
-            height: 56,
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => const VoicePageLaporan()),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: navy,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 8,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.add, color: Colors.white, size: 22),
-                  SizedBox(width: 10),
-                  Text(
-                    'Laporan Baru',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ) : null,
     );
   }
 }

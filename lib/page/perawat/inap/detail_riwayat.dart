@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:vocare/page/perawat/inap/voice.dart';
 
 class DetailRiwayatInap extends StatelessWidget {
   final String reportText;
@@ -78,7 +79,11 @@ class DetailRiwayatInap extends StatelessWidget {
             height: 56,
             child: ElevatedButton.icon(
               onPressed: () {
-                // aksi save di sini
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const VoicePageLaporan(),
+                  ),
+                );
               },
               icon: const Icon(Icons.add, color: Colors.white),
               label: const Text(

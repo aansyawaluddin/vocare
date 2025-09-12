@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:vocare/page/home.dart';
+import 'package:vocare/page/perawat/home.dart'; 
+import 'package:vocare/page/admin/home.dart'; 
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -15,28 +16,57 @@ class _LoginState extends State<Login> {
 
   bool _isLoading = false;
 
+  final Map<String, Map<String, String>> _dummyUsers = {
+    'perawat1': {'password': 'perawat123', 'role': 'perawat'},
+    'admin1': {'password': 'admin123', 'role': 'admin'},
+  };
+
   void _login() async {
     setState(() {
       _isLoading = true;
     });
 
-    String username = _usernameController.text;
-    String password = _passwordController.text;
+    final String username = _usernameController.text.trim();
+    final String password = _passwordController.text;
 
-    await Future.delayed(const Duration(seconds: 1));
+    await Future.delayed(const Duration(milliseconds: 800));
 
     setState(() {
       _isLoading = false;
     });
 
-    if (username.isNotEmpty && password.isNotEmpty) {
-      Navigator.push(
+    if (username.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Username dan Password harus diisi")),
+      );
+      return;
+    }
+
+    final user = _dummyUsers[username];
+    if (user == null || user['password'] != password) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Username atau Password salah")),
+      );
+      return;
+    }
+
+    final role = user['role'];
+    _usernameController.clear();
+    _passwordController.clear();
+
+    if (role == 'perawat') {
+      Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const HomePage()),
+        MaterialPageRoute(builder: (context) => const HomePerawatPage()),
+      );
+    } else if (role == 'admin') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeAdminPage()),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Username dan Password harus diisi")),
+        const SnackBar(content: Text("Role tidak dikenali")),
       );
     }
   }
