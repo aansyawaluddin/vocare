@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:vocare/login.dart';
 import 'package:vocare/widgets/inap.dart';
 import 'package:vocare/widgets/pasien.dart';
 
-class HomeAdminPage extends StatefulWidget {
-  const HomeAdminPage({super.key});
+class HomeKetuaTimPage extends StatefulWidget {
+  const HomeKetuaTimPage({super.key});
 
   @override
-  State<HomeAdminPage> createState() => _HomeAdminPageState();
+  State<HomeKetuaTimPage> createState() => _HomeKetuaTimPageState();
 }
 
-class _HomeAdminPageState extends State<HomeAdminPage> {
+class _HomeKetuaTimPageState extends State<HomeKetuaTimPage> {
   int _selectedTab = 0;
 
   final List<String> rooms = [
@@ -115,16 +116,60 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                                   ),
                                 ),
 
-                                Container(
-                                  width: isCompact ? 36 : 40,
-                                  height: isCompact ? 36 : 40,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.white24,
-                                  ),
-                                  child: const Icon(
-                                    Icons.person,
-                                    color: Colors.white,
+                                GestureDetector(
+                                  onTapDown: (TapDownDetails details) async {
+                                    final RenderBox overlay =
+                                        Overlay.of(
+                                              context,
+                                            ).context.findRenderObject()
+                                            as RenderBox;
+                                    await showMenu(
+                                      color: Color(0xFFD7E2FD),
+                                      context: context,
+                                      position: RelativeRect.fromRect(
+                                        details.globalPosition &
+                                            const Size(40, 40),
+                                        Offset.zero & overlay.size,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      items: [
+                                        PopupMenuItem(
+                                          child: const Text(
+                                            "Logout",
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xFF093275),
+                                            ),
+                                          ),
+                                          onTap: () {
+                                            Future.delayed(
+                                              Duration.zero,
+                                              () => Navigator.pushReplacement(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) =>
+                                                      const Login(),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                  child: Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: const BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.white24,
+                                    ),
+                                    child: const Icon(
+                                      Icons.person,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                 ),
                               ],

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:vocare/page/perawat/inap/voice.dart';
 
-class DetailRiwayatInap extends StatelessWidget {
+class DetaiRiwayatPage extends StatelessWidget {
   final String reportText;
-  const DetailRiwayatInap({super.key, required this.reportText});
+  const DetaiRiwayatPage({super.key, required this.reportText});
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +53,7 @@ class DetailRiwayatInap extends StatelessWidget {
         backgroundColor: background,
         centerTitle: true,
         title: const Text(
-          'Vocare Report',
+          'Daftar Laporan',
           style: TextStyle(
             color: Color(0xFF083B74),
             fontWeight: FontWeight.w700,
@@ -66,7 +66,18 @@ class DetailRiwayatInap extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 20.0),
           child: ListView(
             padding: const EdgeInsets.only(bottom: 18, top: 10),
-            children: [section('29/08/2025 14:30'), const SizedBox(height: 10)],
+            children: [
+              Text(
+                'Tn. Andi (RM: 1234)',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0XFF093275),
+                ),
+              ),
+              const SizedBox(height:5 ),
+              section('29/08/2025 14:30'),
+            ],
           ),
         ),
       ),

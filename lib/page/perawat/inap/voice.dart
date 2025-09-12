@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:vocare/page/perawat/laporan/report1.dart';
+import 'package:vocare/page/perawat/inap/report.dart';
 
 enum VoiceState { initial, listening, processing }
 
@@ -241,7 +241,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
             if (!mounted) return;
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => VocareReport(reportText: toShow),
+                builder: (_) => VocareReportInap(reportText: toShow),
               ),
             );
 
@@ -291,7 +291,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
       // navigasi ke report
       if (!mounted) return;
       Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => VocareReport(reportText: toShow)),
+        MaterialPageRoute(builder: (_) => VocareReportInap(reportText: toShow)),
       );
 
       // kembali ke state awal pada halaman voice

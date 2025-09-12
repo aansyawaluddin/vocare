@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:vocare/page/perawat/inap/detail_riwayat.dart';
+import 'package:vocare/page/perawat/inap/daftar_riwayat.dart';
 
 class PasienInapWidget extends StatefulWidget {
   const PasienInapWidget({
@@ -111,7 +111,7 @@ class _PasienInapWidgetState extends State<PasienInapWidget> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => DetailRiwayatInap(
+                            builder: (_) => DaftarRiwayatPage(
                               reportText: p['reportText'] ?? '-',
                             ),
                           ),

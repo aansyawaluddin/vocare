@@ -159,7 +159,7 @@ class _VocareReport2State extends State<VocareReport2> {
                 ' CPPT 40 10-09-2025 Perawat - Aan',
                 style: TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.bold,
                   color: Color(0XFF093275),
                 ),
               ),
