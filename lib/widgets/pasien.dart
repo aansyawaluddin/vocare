@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class PasienWidget extends StatelessWidget {
-  const PasienWidget({
+class PerawatWidget extends StatelessWidget {
+  const PerawatWidget({
     super.key,
     required this.reports,
     required this.navy,

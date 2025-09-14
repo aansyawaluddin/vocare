@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:vocare/page/perawat/inap/daftar_riwayat.dart';
+import 'package:vocare/page/perawat/inap/daftar_riwayat.dart' as perawat_page;
+import 'package:vocare/page/ketua_tim/daftar_riwayat.dart' as ketua_page;
 
 class PasienInapWidget extends StatefulWidget {
   const PasienInapWidget({
@@ -8,6 +9,7 @@ class PasienInapWidget extends StatefulWidget {
     required this.inpatients,
     required this.navy,
     required this.cardBlue,
+    required this.role, 
     this.isCompact = false,
   });
 
@@ -16,6 +18,7 @@ class PasienInapWidget extends StatefulWidget {
   final Color navy;
   final Color cardBlue;
   final bool isCompact;
+  final String role;
 
   @override
   State<PasienInapWidget> createState() => _PasienInapWidgetState();
@@ -27,7 +30,12 @@ class _PasienInapWidgetState extends State<PasienInapWidget> {
   @override
   void initState() {
     super.initState();
-    _selectedRoom = widget.rooms.first;
+    _selectedRoom = widget.rooms.isNotEmpty ? widget.rooms.first : null;
+  }
+
+  bool get _isKetua {
+    final r = widget.role.toLowerCase();
+    return r.contains('ketua');
   }
 
   @override
@@ -36,7 +44,7 @@ class _PasienInapWidgetState extends State<PasienInapWidget> {
     final cardBlue = widget.cardBlue;
     final isCompact = widget.isCompact;
 
-    final visible = _selectedRoom == 'Semua Ruangan'
+    final visible = (_selectedRoom == null || _selectedRoom == 'Semua Ruangan')
         ? widget.inpatients
         : widget.inpatients.where((p) => p['room'] == _selectedRoom).toList();
 
@@ -107,13 +115,20 @@ class _PasienInapWidgetState extends State<PasienInapWidget> {
                       lastAction: p['lastAction'] ?? '-',
                       isCompact: isCompact,
                       onTap: () {
-                        // navigasi ke halaman detail, kirim data pasien
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => DaftarRiwayatPage(
-                              reportText: p['reportText'] ?? '-',
-                            ),
+                            builder: (_) {
+                              if (_isKetua) {
+                                return ketua_page.DaftarRiwayatPage(
+                                  reportText: p['reportText'] ?? '-',
+                                );
+                              } else {
+                                return perawat_page.DaftarRiwayatPage(
+                                  reportText: p['reportText'] ?? '-',
+                                );
+                              }
+                            },
                           ),
                         );
                       },

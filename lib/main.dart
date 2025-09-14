@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:vocare/login.dart';
+import 'package:vocare/page/login/login.dart';
 
 void main() {
   runApp(const MyApp());

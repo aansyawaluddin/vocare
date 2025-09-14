@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:vocare/page/login/login.dart';
-import 'package:vocare/widgets/inap.dart';
+import 'package:vocare/common/type.dart';
+import 'package:vocare/widgets/assessment.dart';
 import 'package:vocare/widgets/pasien.dart';
 
-class HomeKetuaTimPage extends StatefulWidget {
-  const HomeKetuaTimPage({super.key});
+class HomeAdminPage extends StatefulWidget {
+  const HomeAdminPage({super.key});
 
   @override
-  State<HomeKetuaTimPage> createState() => _HomeKetuaTimPageState();
+  State<HomeAdminPage> createState() => _HomeAdminPageState();
 }
 
-class _HomeKetuaTimPageState extends State<HomeKetuaTimPage> {
+class _HomeAdminPageState extends State<HomeAdminPage> {
   int _selectedTab = 0;
 
   final List<String> rooms = [
@@ -106,7 +107,7 @@ class _HomeKetuaTimPageState extends State<HomeKetuaTimPage> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        'Welcome Ketua Tim',
+                                        'Welcome Admin',
                                         style: TextStyle(
                                           color: Colors.white.withOpacity(0.95),
                                           fontSize: isCompact ? 13 : 14,
@@ -204,7 +205,7 @@ class _HomeKetuaTimPageState extends State<HomeKetuaTimPage> {
                                         ),
                                         child: Center(
                                           child: Text(
-                                            'Perawat',
+                                            'Pengguna',
                                             style: TextStyle(
                                               color: _selectedTab == 0
                                                   ? navy
@@ -235,7 +236,7 @@ class _HomeKetuaTimPageState extends State<HomeKetuaTimPage> {
                                         ),
                                         child: Center(
                                           child: Text(
-                                            'Pasien inap',
+                                            'Assessment',
                                             style: TextStyle(
                                               color: _selectedTab == 1
                                                   ? navy
@@ -266,14 +267,7 @@ class _HomeKetuaTimPageState extends State<HomeKetuaTimPage> {
                                 cardBlue: cardBlue,
                                 isCompact: isCompact,
                               )
-                            : PasienInapWidget(
-                                rooms: rooms,
-                                inpatients: inpatients,
-                                navy: navy,
-                                cardBlue: cardBlue,
-                                role: 'ketua_tim',
-                                isCompact: isCompact,
-                              ),
+                            : AssessmentWidget()
                       ),
 
                       const SizedBox(height: 24),
@@ -285,6 +279,44 @@ class _HomeKetuaTimPageState extends State<HomeKetuaTimPage> {
           },
         ),
       ),
+            bottomNavigationBar: _selectedTab == 0
+          ? SafeArea(
+              minimum: const EdgeInsets.fromLTRB(24, 8, 24, 18),
+              child: Padding(
+                padding: const EdgeInsets.only(top: 6.0),
+                child: SizedBox(
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: () {
+         
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: navy,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 8,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.add, color: Colors.white, size: 22),
+                        SizedBox(width: 10),
+                        Text(
+                          'Tambah Pengguna',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            )
+          : null,
     );
   }
 }

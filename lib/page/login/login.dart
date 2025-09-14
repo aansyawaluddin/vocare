@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:vocare/page/admin/home.dart';
 import 'package:vocare/page/perawat/home.dart'; 
 import 'package:vocare/page/ketua_tim/home.dart'; 
 
@@ -19,6 +20,7 @@ class _LoginState extends State<Login> {
   final Map<String, Map<String, String>> _dummyUsers = {
     'perawat1': {'password': 'perawat123', 'role': 'perawat'},
     'ketuatim1': {'password': 'ketuatim123', 'role': 'ketua_tim'},
+    'admin1': {'password': 'admin123', 'role': 'admin'},
   };
 
   void _login() async {
@@ -63,6 +65,11 @@ class _LoginState extends State<Login> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const HomeKetuaTimPage()),
+      );
+    } else if (role == 'admin') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeAdminPage()),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(

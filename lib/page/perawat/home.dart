@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:vocare/login.dart';
+import 'package:vocare/page/login/login.dart';
 import 'package:vocare/page/perawat/laporan/voice.dart';
 import 'package:vocare/widgets/inap.dart';
 import 'package:vocare/widgets/laporan.dart';
@@ -272,6 +272,7 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
                                 inpatients: inpatients,
                                 navy: navy,
                                 cardBlue: cardBlue,
+                                role: 'perawat',
                                 isCompact: isCompact,
                               ),
                       ),
