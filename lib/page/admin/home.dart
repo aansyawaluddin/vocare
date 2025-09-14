@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:vocare/widgets/border.dart';
 import 'package:vocare/page/login/login.dart';
-import 'package:vocare/common/type.dart';
 import 'package:vocare/widgets/assessment.dart';
-import 'package:vocare/widgets/pasien.dart';
+import 'package:vocare/widgets/pengguna.dart';
 
 class HomeAdminPage extends StatefulWidget {
   const HomeAdminPage({super.key});
@@ -14,27 +14,189 @@ class HomeAdminPage extends StatefulWidget {
 class _HomeAdminPageState extends State<HomeAdminPage> {
   int _selectedTab = 0;
 
-  final List<String> rooms = [
-    'Semua Ruangan',
-    'UGD',
-    'Perawatan',
-    'ICU',
-    'PICU/NICU',
-  ];
-
-  final List<Map<String, String>> reports = List.generate(
+  final List<Map<String, String>> pengguna = List.generate(
     5,
-    (index) => {'perawat': 'Budi Santoso', 'kamar': 'Ruangan IGD'},
+    (index) => {
+      'nama': 'Budi Santoso $index',
+      'jabatan': 'Perawat',
+      'role': 'Admin',
+    },
   );
 
-  final List<Map<String, String>> inpatients = List.generate(6, (index) {
-    return {
-      'name': 'Nama Pasien ${index + 1}',
-      'room': index % 3 == 0 ? 'UGD' : (index % 3 == 1 ? 'Perawatan' : 'ICU'),
-      'condition': 'Stabil',
-      'lastAction': '29/08/2025 14:30',
-    };
-  });
+  void _showAddPenggunaModal({
+    required BuildContext context,
+    required bool isCompact,
+    required Color navy,
+    required Color cardBlue,
+  }) {
+    final _formKey = GlobalKey<FormState>();
+    final namaCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final jabatanCtrl = TextEditingController();
+    final passwordCtrl = TextEditingController();
+    String? selectedRole;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          backgroundColor: Colors.transparent,
+          child: SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 380),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.12),
+                      blurRadius: 12,
+                    ),
+                  ],
+                ),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Heading
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Tambah Pengguna',
+                          style: TextStyle(
+                            fontSize: isCompact ? 16 : 18,
+                            fontWeight: FontWeight.w700,
+                            color: navy,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Nama (pakai widget reusable)
+                      AppTextFormField(
+                        controller: namaCtrl,
+                        label: 'Nama',
+                        hint: 'Masukkan Nama Lengkap',
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Nama wajib'
+                            : null,
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Email
+                      AppTextFormField(
+                        controller: emailCtrl,
+                        label: 'Email',
+                        hint: 'Masukkan Email',
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty)
+                            return 'Email wajib';
+                          final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+                          if (!emailRegex.hasMatch(v.trim()))
+                            return 'Email tidak valid';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Jabatan
+                      AppTextFormField(
+                        controller: jabatanCtrl,
+                        label: 'Jabatan',
+                        hint: 'Masukkan Jabatan',
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Jabatan wajib'
+                            : null,
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Role (dropdown) - gunakan decoration yang sama
+                      DropdownButtonFormField<String>(
+                        value: selectedRole,
+                        items: ['Admin', 'Perawat', 'Dokter', 'User']
+                            .map(
+                              (r) => DropdownMenuItem(value: r, child: Text(r)),
+                            )
+                            .toList(),
+                        decoration: appInputDecoration(label: 'Role', hint: ''),
+                        onChanged: (v) => selectedRole = v,
+                        validator: (v) =>
+                            (v == null || v.isEmpty) ? 'Pilih role' : null,
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Password
+                      AppTextFormField(
+                        controller: passwordCtrl,
+                        label: 'Password',
+                        hint: 'Masukkan Password',
+                        obscureText: true,
+                        validator: (v) => (v == null || v.trim().length < 6)
+                            ? 'Password minimal 6 karakter'
+                            : null,
+                      ),
+                      const SizedBox(height: 18),
+
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: navy,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          onPressed: () {
+                            if (_formKey.currentState?.validate() ?? false) {
+                              // tambahkan pengguna ke list
+                              setState(() {
+                                pengguna.add({
+                                  'nama': namaCtrl.text.trim(),
+                                  'jabatan': jabatanCtrl.text.trim(),
+                                  'role': selectedRole ?? 'User',
+                                });
+                              });
+                              Navigator.of(ctx).pop();
+                            }
+                          },
+                          child: const Text(
+                            'Submit',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 6),
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: const Text(
+                          'Batal',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +218,6 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Header
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(
@@ -261,15 +422,14 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 18.0),
                         child: _selectedTab == 0
-                            ? PerawatWidget(
-                                reports: reports,
+                            ? PenggunaWidget(
+                                pengguna: pengguna,
                                 navy: navy,
                                 cardBlue: cardBlue,
                                 isCompact: isCompact,
                               )
-                            : AssessmentWidget()
+                            : AssessmentWidget(),
                       ),
-
                       const SizedBox(height: 24),
                     ],
                   ),
@@ -279,7 +439,7 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
           },
         ),
       ),
-            bottomNavigationBar: _selectedTab == 0
+      bottomNavigationBar: _selectedTab == 0
           ? SafeArea(
               minimum: const EdgeInsets.fromLTRB(24, 8, 24, 18),
               child: Padding(
@@ -288,7 +448,12 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                   height: 56,
                   child: ElevatedButton(
                     onPressed: () {
-         
+                      _showAddPenggunaModal(
+                        context: context,
+                        isCompact: MediaQuery.of(context).size.width < 380,
+                        navy: navy,
+                        cardBlue: cardBlue,
+                      );
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: navy,

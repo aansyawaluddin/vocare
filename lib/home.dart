@@ -21,30 +21,32 @@ void showGlobalSnackBar(BuildContext context, String message) {
   );
 }
 
-class RoleConfig{
-  const RoleConfig({
-    required this.pages,
-  });
+class RoleConfig {
+  const RoleConfig({required this.pages});
 
-    final List<Widget> Function(User, BuildContext) pages;
+  final List<Widget> Function(User, BuildContext) pages;
 
   static final Map<Role, RoleConfig> configs = {
     Role.admin: RoleConfig(
       pages: (user, thisContext) => [
-        HomeAdminPage(
-          user: user,
-        ),
+        // HomeAdminPage(
+        //   user: user,
+        // ),
       ],
     ),
-      'ketua_tim': RoleConfig(
-        pages: (user, context) => [
-          HomePage(user: user),
-        ],
-      ),
-      'perawat': RoleConfig(
-        pages: (user, context) => [
-          HomePage(user: user),
-        ],
-      ),
-    };
+    Role.ketuaTim: RoleConfig(
+      pages: (user, thisContext) => [
+        // HomeKetuaTimPage(
+        //   user: user,
+        // ),
+      ],
+    ),
+    Role.perawat: RoleConfig(
+      pages: (user, thisContext) => [
+        // HomePerawatPage(
+        //   user: user,
+        // ),
+      ],
+    ),
+  };
 }
