@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:vocare/common/type.dart';
 import 'package:vocare/page/perawat/inap/daftar_riwayat.dart' as perawat_page;
 import 'package:vocare/page/ketua_tim/daftar_riwayat.dart' as ketua_page;
 
@@ -115,22 +116,22 @@ class _PasienInapWidgetState extends State<PasienInapWidget> {
                       lastAction: p['lastAction'] ?? '-',
                       isCompact: isCompact,
                       onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) {
-                              if (_isKetua) {
-                                return ketua_page.DaftarRiwayatPage(
-                                  reportText: p['reportText'] ?? '-',
-                                );
-                              } else {
-                                return perawat_page.DaftarRiwayatPage(
-                                  reportText: p['reportText'] ?? '-',
-                                );
-                              }
-                            },
-                          ),
-                        );
+                        // Navigator.push(
+                        //   context,
+                        //   MaterialPageRoute(
+                        //     builder: (_) {
+                        //       if (_isKetua) {
+                        //         return ketua_page.DaftarRiwayatPage(
+                        //           reportText: p['reportText'] ?? '-',
+                        //         );
+                        //       } else {
+                        //         return perawat_page.DaftarRiwayatPage(user:,
+                        //           reportText: p['reportText'] ?? '-',
+                        //         );
+                        //       }
+                        //     },
+                        //   ),
+                        // );
                       },
                     ),
                   ),

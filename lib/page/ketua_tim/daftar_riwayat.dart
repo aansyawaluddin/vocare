@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:vocare/page/perawat/inap/detail_riwayat.dart';
-import 'package:vocare/page/perawat/inap/voice.dart';
+import 'package:vocare/page/ketua_tim/detail_riwayat.dart';
 
 class DaftarRiwayatPage extends StatelessWidget {
   final String reportText;
@@ -142,11 +141,11 @@ class DaftarRiwayatPage extends StatelessWidget {
             height: 56,
             child: ElevatedButton.icon(
               onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const VoicePageLaporan(),
-                  ),
-                );
+                // Navigator.of(context).push(
+                //   MaterialPageRoute(
+                //     builder: (context) => const VoicePageLaporan(),
+                //   ),
+                // );
               },
               icon: const Icon(Icons.add, color: Colors.white),
               label: const Text(

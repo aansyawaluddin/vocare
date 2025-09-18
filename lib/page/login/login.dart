@@ -1,8 +1,14 @@
 import 'dart:math' as math;
+import 'dart:convert';
+import 'dart:io';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:vocare/page/admin/home.dart';
-import 'package:vocare/page/perawat/home.dart'; 
-import 'package:vocare/page/ketua_tim/home.dart'; 
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:vocare/common/type.dart';
+import 'package:vocare/home.dart';
 
 class Login extends StatefulWidget {
   const Login({super.key});
@@ -11,70 +17,166 @@ class Login extends StatefulWidget {
   State<Login> createState() => _LoginState();
 }
 
+Future<User> login(String username, String password) async {
+  try {
+    if (!dotenv.isInitialized) {
+      await dotenv.load(fileName: '.env');
+    }
+
+    final apiBase = dotenv.env['API_URL'];
+    if (apiBase == null || apiBase.isEmpty) {
+      throw Exception('NO_API');
+    }
+
+    final storage = FlutterSecureStorage();
+    final apiUrl = "$apiBase/auth/login";
+
+    final response = await http
+        .post(
+          Uri.parse(apiUrl),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({'username': username, 'password': password}),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.body == null || response.body.isEmpty) {
+      if (response.statusCode == 401) throw Exception('invalid_credentials');
+      throw Exception('Response kosong dari server');
+    }
+
+    dynamic responseData;
+    try {
+      responseData = json.decode(response.body);
+    } catch (e) {
+      throw Exception('Response tidak valid dari server');
+    }
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      String? accessToken;
+      if (responseData is Map) {
+        accessToken =
+            (responseData['access_token'] ?? responseData['token'])
+                ?.toString() ??
+            (responseData['data'] is Map
+                ? (responseData['data']['access_token'] ??
+                          responseData['data']['token'])
+                      ?.toString()
+                : null);
+      }
+
+      if (accessToken != null && accessToken.isNotEmpty) {
+        await storage.write(key: 'access_token', value: accessToken);
+      }
+
+      // ambil object user dari berbagai struktur
+      dynamic userJson;
+      if (responseData is Map) {
+        userJson =
+            responseData['user'] ??
+            (responseData['data'] is Map
+                ? responseData['data']['user']
+                : null) ??
+            responseData;
+      } else {
+        userJson = responseData;
+      }
+
+      if (userJson == null) {
+        throw Exception('Response tidak berisi informasi user');
+      }
+
+      if (userJson is Map<String, dynamic>) {
+        return User.fromJson(userJson);
+      } else if (userJson is Map) {
+        return User.fromJson(Map<String, dynamic>.from(userJson));
+      } else {
+        throw Exception('Format user tidak valid');
+      }
+    } else if (response.statusCode == 401) {
+      throw Exception('invalid_credentials');
+    } else {
+      final msg = (responseData is Map && responseData['message'] != null)
+          ? responseData['message'].toString()
+          : 'Terjadi kesalahan (${response.statusCode})';
+      throw Exception(msg);
+    }
+  } on SocketException {
+    throw Exception('Server Bermasalah');
+  } on TimeoutException {
+    throw Exception('Tidak Ada Jaringan');
+  } on FormatException {
+    throw Exception('Response tidak valid dari server');
+  }
+}
+
 class _LoginState extends State<Login> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
   bool _isLoading = false;
 
-  final Map<String, Map<String, String>> _dummyUsers = {
-    'perawat1': {'password': 'perawat123', 'role': 'perawat'},
-    'ketuatim1': {'password': 'ketuatim123', 'role': 'ketua_tim'},
-    'admin1': {'password': 'admin123', 'role': 'admin'},
-  };
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
 
-  void _login() async {
-    setState(() {
-      _isLoading = true;
-    });
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
-    final String username = _usernameController.text.trim();
-    final String password = _passwordController.text;
-
-    await Future.delayed(const Duration(milliseconds: 800));
-
-    setState(() {
-      _isLoading = false;
-    });
+  Future<void> _login() async {
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text.trim();
 
     if (username.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Username dan Password harus diisi")),
+        const SnackBar(
+          content: Text('username dan password harus diisi'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
 
-    final user = _dummyUsers[username];
-    if (user == null || user['password'] != password) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Username atau Password salah")),
-      );
-      return;
-    }
+    setState(() => _isLoading = true);
 
-    final role = user['role'];
-    _usernameController.clear();
-    _passwordController.clear();
+    try {
+      final user = await login(username, password);
+      if (!mounted) return;
+      FocusScope.of(context).unfocus();
+      
+      
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => Home(role: user.role, user: user),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
 
-    if (role == 'perawat') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomePerawatPage()),
-      );
-    } else if (role == 'ketua_tim') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeKetuaTimPage()),
-      );
-    } else if (role == 'admin') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeAdminPage()),
-      );
-    } else {
+      var errorMessage = e.toString();
+      if (errorMessage.contains('invalid_credentials')) {
+        errorMessage = 'username atau password salah';
+      } else {
+        errorMessage = errorMessage.replaceAll('Exception: ', '');
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Role tidak dikenali")),
+        SnackBar(
+          content: Text(
+            errorMessage,
+            style: const TextStyle(color: Colors.white),
+          ),
+          backgroundColor: Colors.red,
+        ),
       );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -105,8 +207,10 @@ class _LoginState extends State<Login> {
                     width: double.infinity,
                     child: TextField(
                       controller: _usernameController,
+                      keyboardType: TextInputType.text,
+                      textInputAction: TextInputAction.next,
                       decoration: InputDecoration(
-                        labelText: 'Username',
+                        labelText: 'username',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: const BorderSide(
@@ -141,6 +245,7 @@ class _LoginState extends State<Login> {
                     child: TextField(
                       controller: _passwordController,
                       obscureText: true,
+                      textInputAction: TextInputAction.done,
                       decoration: InputDecoration(
                         labelText: 'Password',
                         border: OutlineInputBorder(

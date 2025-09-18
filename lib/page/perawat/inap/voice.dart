@@ -2,17 +2,19 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:vocare/common/type.dart';
 import 'package:vocare/page/perawat/inap/report.dart';
 
 enum VoiceState { initial, listening, processing }
 
-class VoicePageLaporan extends StatefulWidget {
-  const VoicePageLaporan({super.key});
+class VoicePageLaporanInap extends StatefulWidget {
+  const VoicePageLaporanInap({required this.user, super.key});
+  final User user;
   @override
-  State<VoicePageLaporan> createState() => _VoicePageLaporanState();
+  State<VoicePageLaporanInap> createState() => _VoicePageLaporanInapState();
 }
 
-class _VoicePageLaporanState extends State<VoicePageLaporan>
+class _VoicePageLaporanInapState extends State<VoicePageLaporanInap>
     with SingleTickerProviderStateMixin {
   final SpeechToText _speech = SpeechToText();
   bool _speechEnabled = false;

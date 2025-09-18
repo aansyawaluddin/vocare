@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:vocare/common/type.dart';
 import 'package:vocare/page/login/login.dart';
 import 'package:vocare/widgets/inap.dart';
 import 'package:vocare/widgets/perawat.dart';
 
 class HomeKetuaTimPage extends StatefulWidget {
-  const HomeKetuaTimPage({super.key});
+  const HomeKetuaTimPage({ required this.user, super.key});
+  final User user;
 
   @override
   State<HomeKetuaTimPage> createState() => _HomeKetuaTimPageState();

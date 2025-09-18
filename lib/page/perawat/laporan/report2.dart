@@ -133,20 +133,12 @@ class _VocareReport2State extends State<VocareReport2> {
     return Scaffold(
       backgroundColor: background,
       appBar: AppBar(
-        elevation: 0,
-        backgroundColor: background,
-        centerTitle: true,
-        title: const Text(
+        titleSpacing: 60,
+        title: Text(
           'Vocare Report',
-          style: TextStyle(
-            color: Color(0xFF083B74),
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-          ),
+          style: TextStyle(fontSize: 20, color: Color(0xFF093275)),
         ),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(color: background),
-        ),
+        backgroundColor: const Color(0xFFD7E2FD),
       ),
       body: SafeArea(
         child: Padding(

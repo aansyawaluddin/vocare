@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:vocare/common/type.dart';
 import 'package:vocare/page/perawat/inap/voice.dart';
 
 class DetaiRiwayatPage extends StatelessWidget {
   final String reportText;
-  const DetaiRiwayatPage({super.key, required this.reportText});
+  final User user;
+  const DetaiRiwayatPage({super.key, required this.reportText, required this.user});
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +94,7 @@ class DetaiRiwayatPage extends StatelessWidget {
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (context) => const VoicePageLaporan(),
+                    builder: (context) => VoicePageLaporanInap(user: user),
                   ),
                 );
               },

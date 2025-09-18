@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:vocare/common/type.dart';
 
 class PenggunaWidget extends StatelessWidget {
   const PenggunaWidget({
@@ -9,10 +10,21 @@ class PenggunaWidget extends StatelessWidget {
     this.isCompact = false,
   });
 
-  final List<Map<String, String>> pengguna;
+  final List<User> pengguna;
   final Color navy;
   final Color cardBlue;
   final bool isCompact;
+
+  String _roleLabel(Role role) {
+    switch (role) {
+      case Role.admin:
+        return 'admin';
+      case Role.ketuaTim:
+        return 'ketuaTim';
+      case Role.perawat:
+        return 'perawat';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,25 +45,17 @@ class PenggunaWidget extends StatelessWidget {
       children: [
         const SizedBox(height: 12),
         Column(
-          children: pengguna.map((r) {
-            final nama = (r['perawat']?.trim().isNotEmpty == true)
-                ? r['perawat']
-                : (r['nama']?.trim().isNotEmpty == true ? r['nama'] : '-');
-            final jabatan = (r['jabatan']?.trim().isNotEmpty == true)
-                ? r['jabatan']
-                : '-';
-            final role = (r['role']?.trim().isNotEmpty == true)
-                ? r['role']
-                : '-';
+          children: pengguna.map((u) {
+            final nama = (u.username.trim().isNotEmpty) ? u.username : '-';
+            final role = _roleLabel(u.role);
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 12.0),
               child: ReportCard(
                 navy: navy,
                 cardBlue: cardBlue,
-                perawat: nama ?? '-',
-                jabatan: jabatan ?? '-',
-                role: role ?? '-',
+                perawat: nama,
+                role: role,
                 isCompact: isCompact,
               ),
             );
@@ -68,7 +72,6 @@ class ReportCard extends StatelessWidget {
     required this.navy,
     required this.cardBlue,
     required this.perawat,
-    required this.jabatan,
     required this.role,
     this.isCompact = false,
   });
@@ -76,7 +79,6 @@ class ReportCard extends StatelessWidget {
   final Color navy;
   final Color cardBlue;
   final String perawat;
-  final String jabatan;
   final String role;
   final bool isCompact;
 
@@ -86,7 +88,7 @@ class ReportCard extends StatelessWidget {
       children: [
         Container(
           width: isCompact ? 48 : 58,
-          height: isCompact ? 80 : 90,
+          height: isCompact ? 80 : 65,
           decoration: BoxDecoration(
             color: navy,
             borderRadius: BorderRadius.circular(10),
@@ -120,14 +122,6 @@ class ReportCard extends StatelessWidget {
                   Text(
                     'Nama: $perawat',
                     style: TextStyle(color: navy, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Jabatan: $jabatan',
-                    style: TextStyle(
-                      color: navy.withOpacity(0.8),
-                      fontSize: 12,
-                    ),
                   ),
                   const SizedBox(height: 6),
                   Text(

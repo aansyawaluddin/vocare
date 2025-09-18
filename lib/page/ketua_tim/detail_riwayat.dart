@@ -90,11 +90,11 @@ class DetaiRiwayatPage extends StatelessWidget {
             height: 56,
             child: ElevatedButton.icon(
               onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const VoicePageLaporan(),
-                  ),
-                );
+                // Navigator.of(context).push(
+                //   MaterialPageRoute(
+                //     builder: (context) => const VoicePageLaporan(),
+                //   ),
+                // );
               },
               icon: const Icon(Icons.add, color: Colors.white),
               label: const Text(

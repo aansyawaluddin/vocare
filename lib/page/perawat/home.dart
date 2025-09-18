@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:vocare/common/type.dart';
 import 'package:vocare/page/login/login.dart';
-import 'package:vocare/page/perawat/laporan/voice.dart';
+import 'package:vocare/page/perawat/laporan/upload_lab.dart';
 import 'package:vocare/widgets/inap.dart';
 import 'package:vocare/widgets/laporan.dart';
 
 class HomePerawatPage extends StatefulWidget {
-  const HomePerawatPage({super.key});
+  const HomePerawatPage({required this.user, super.key});
+  final User user;
 
   @override
   State<HomePerawatPage> createState() => _HomePerawatPageState();
@@ -298,7 +300,7 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
                     onPressed: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (context) => const VoicePageLaporan(),
+                          builder: (context) => UploadLab(user: widget.user),
                         ),
                       );
                     },

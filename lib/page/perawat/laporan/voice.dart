@@ -2,12 +2,14 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:vocare/common/type.dart';
 import 'package:vocare/page/perawat/laporan/report1.dart';
 
 enum VoiceState { initial, listening, processing }
 
 class VoicePageLaporan extends StatefulWidget {
-  const VoicePageLaporan({super.key});
+  const VoicePageLaporan({super.key, required this.user});
+  final User user;
   @override
   State<VoicePageLaporan> createState() => _VoicePageLaporanState();
 }
@@ -255,7 +257,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
         },
         localeId: 'id-ID',
         listenFor: const Duration(seconds: 900),
-        pauseFor: const Duration(seconds: 8),
+        pauseFor: const Duration(seconds: 30),
         partialResults: true,
         cancelOnError: true,
       );
@@ -468,15 +470,12 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     return Scaffold(
       backgroundColor: const Color(0xFFD7E2FD),
       appBar: AppBar(
-        titleSpacing: 0,
-        title: const Center(
-          child: Text(
-            'Vocare Report',
-            style: TextStyle(fontSize: 20, color: Color(0xFF093275)),
-          ),
+        titleSpacing: 30,
+        title: Text(
+          'Vocare Report',
+          style: TextStyle(fontSize: 20, color: Color(0xFF093275)),
         ),
         backgroundColor: const Color(0xFFD7E2FD),
-        elevation: 0,
       ),
       body: SafeArea(
         child: Column(

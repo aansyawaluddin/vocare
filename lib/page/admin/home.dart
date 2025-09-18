@@ -1,201 +1,131 @@
+import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
-import 'package:vocare/widgets/border.dart';
+import 'package:vocare/common/type.dart';
 import 'package:vocare/page/login/login.dart';
-import 'package:vocare/widgets/assessment.dart';
-import 'package:vocare/widgets/pengguna.dart';
+import 'package:vocare/widgets/admin/add_user.dart';
+import 'package:vocare/widgets/admin/pengguna.dart';
+import 'package:vocare/widgets/admin/assessment.dart';
 
 class HomeAdminPage extends StatefulWidget {
-  const HomeAdminPage({super.key});
+  const HomeAdminPage({required this.user, super.key});
+  final User user;
 
   @override
   State<HomeAdminPage> createState() => _HomeAdminPageState();
 }
 
 class _HomeAdminPageState extends State<HomeAdminPage> {
+  List<User> users = [];
+  bool isLoading = true;
+  String? error;
   int _selectedTab = 0;
 
-  final List<Map<String, String>> pengguna = List.generate(
-    5,
-    (index) => {
-      'nama': 'Budi Santoso $index',
-      'jabatan': 'Perawat',
-      'role': 'Admin',
-    },
-  );
+  @override
+  void initState() {
+    super.initState();
+    fetchUsers();
+  }
 
-  void _showAddPenggunaModal({
-    required BuildContext context,
-    required bool isCompact,
-    required Color navy,
-    required Color cardBlue,
-  }) {
-    final _formKey = GlobalKey<FormState>();
-    final namaCtrl = TextEditingController();
-    final emailCtrl = TextEditingController();
-    final jabatanCtrl = TextEditingController();
-    final passwordCtrl = TextEditingController();
-    String? selectedRole;
+  // api fetchUsers
+  Future<void> fetchUsers() async {
+    try {
+      if (!mounted) return;
+      setState(() {
+        isLoading = true;
+        error = null;
+      });
 
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-          backgroundColor: Colors.transparent,
-          child: SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 380),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
-                      blurRadius: 12,
-                    ),
-                  ],
-                ),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Heading
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Tambah Pengguna',
-                          style: TextStyle(
-                            fontSize: isCompact ? 16 : 18,
-                            fontWeight: FontWeight.w700,
-                            color: navy,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
+      const storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'access_token');
 
-                      // Nama (pakai widget reusable)
-                      AppTextFormField(
-                        controller: namaCtrl,
-                        label: 'Nama',
-                        hint: 'Masukkan Nama Lengkap',
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Nama wajib'
-                            : null,
-                      ),
-                      const SizedBox(height: 12),
+      if (token == null) {
+        throw Exception('No access token found');
+      }
 
-                      // Email
-                      AppTextFormField(
-                        controller: emailCtrl,
-                        label: 'Email',
-                        hint: 'Masukkan Email',
-                        keyboardType: TextInputType.emailAddress,
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty)
-                            return 'Email wajib';
-                          final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
-                          if (!emailRegex.hasMatch(v.trim()))
-                            return 'Email tidak valid';
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 12),
+      final response = await http.get(
+        Uri.parse("${dotenv.env['API_URL']}/user/"),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
 
-                      // Jabatan
-                      AppTextFormField(
-                        controller: jabatanCtrl,
-                        label: 'Jabatan',
-                        hint: 'Masukkan Jabatan',
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Jabatan wajib'
-                            : null,
-                      ),
-                      const SizedBox(height: 12),
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final List<dynamic> data = json.decode(response.body);
+        final parsed = data
+            .map((json) => User.fromJson(json as Map<String, dynamic>))
+            .toList();
 
-                      // Role (dropdown) - gunakan decoration yang sama
-                      DropdownButtonFormField<String>(
-                        value: selectedRole,
-                        items: ['Admin', 'Perawat', 'Dokter', 'User']
-                            .map(
-                              (r) => DropdownMenuItem(value: r, child: Text(r)),
-                            )
-                            .toList(),
-                        decoration: appInputDecoration(label: 'Role', hint: ''),
-                        onChanged: (v) => selectedRole = v,
-                        validator: (v) =>
-                            (v == null || v.isEmpty) ? 'Pilih role' : null,
-                      ),
-                      const SizedBox(height: 12),
+        if (!mounted) return;
+        setState(() {
+          users = parsed;
+          isLoading = false;
+        });
+      } else {
+        final msg =
+            'Failed to fetch users: ${response.statusCode} - ${response.body}';
+        if (!mounted) return;
+        setState(() {
+          error = msg;
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        error = e.toString();
+        isLoading = false;
+      });
+    }
+  }
 
-                      // Password
-                      AppTextFormField(
-                        controller: passwordCtrl,
-                        label: 'Password',
-                        hint: 'Masukkan Password',
-                        obscureText: true,
-                        validator: (v) => (v == null || v.trim().length < 6)
-                            ? 'Password minimal 6 karakter'
-                            : null,
-                      ),
-                      const SizedBox(height: 18),
+  // api createUser
+  Future<void> createUser({
+    required String username,
+    required String email,
+    required String password,
+    required String role,
+  }) async {
+    const storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'access_token');
 
-                      SizedBox(
-                        width: double.infinity,
-                        height: 48,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: navy,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          onPressed: () {
-                            if (_formKey.currentState?.validate() ?? false) {
-                              // tambahkan pengguna ke list
-                              setState(() {
-                                pengguna.add({
-                                  'nama': namaCtrl.text.trim(),
-                                  'jabatan': jabatanCtrl.text.trim(),
-                                  'role': selectedRole ?? 'User',
-                                });
-                              });
-                              Navigator.of(ctx).pop();
-                            }
-                          },
-                          child: const Text(
-                            'Submit',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                      ),
+    if (token == null) {
+      throw Exception('No access token found. Silakan login ulang.');
+    }
 
-                      const SizedBox(height: 6),
-                      TextButton(
-                        onPressed: () => Navigator.of(ctx).pop(),
-                        child: const Text(
-                          'Batal',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
+    final body = json.encode({
+      'username': username,
+      'email': email,
+      'password': password,
+      'role': role,
+    });
+
+    final resp = await http.post(
+      Uri.parse("${dotenv.env['API_URL']}/auth/register"),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
       },
+      body: body,
     );
+
+    if (resp.statusCode >= 200 && resp.statusCode < 300) {
+      return;
+    } else {
+      String serverMsg = resp.body;
+      try {
+        final js = json.decode(resp.body);
+        if (js is Map && js['message'] != null) {
+          serverMsg = js['message'].toString();
+        }
+      } catch (_) {}
+      throw Exception(
+        'Gagal menambahkan pengguna: ${resp.statusCode} - $serverMsg',
+      );
+    }
   }
 
   @override
@@ -250,9 +180,7 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                                     ),
                                   ),
                                 ),
-
                                 const SizedBox(width: 12),
-
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -268,7 +196,7 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        'Welcome Admin',
+                                        'Welcome ${widget.user.username}',
                                         style: TextStyle(
                                           color: Colors.white.withOpacity(0.95),
                                           fontSize: isCompact ? 13 : 14,
@@ -277,16 +205,15 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                                     ],
                                   ),
                                 ),
-
                                 GestureDetector(
                                   onTapDown: (TapDownDetails details) async {
                                     final RenderBox overlay =
                                         Overlay.of(
                                               context,
-                                            ).context.findRenderObject()
+                                            )!.context.findRenderObject()
                                             as RenderBox;
                                     await showMenu(
-                                      color: Color(0xFFD7E2FD),
+                                      color: const Color(0xFFD7E2FD),
                                       context: context,
                                       position: RelativeRect.fromRect(
                                         details.globalPosition &
@@ -336,10 +263,7 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                                 ),
                               ],
                             ),
-
                             const SizedBox(height: 14),
-
-                            // Segmented control (tabs)
                             Container(
                               padding: const EdgeInsets.all(4),
                               decoration: BoxDecoration(
@@ -378,7 +302,6 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                                       ),
                                     ),
                                   ),
-
                                   Expanded(
                                     child: GestureDetector(
                                       onTap: () =>
@@ -415,30 +338,46 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 18),
 
-                      // Content: show based on active tab
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 18.0),
                         child: _selectedTab == 0
-                            ? PenggunaWidget(
-                                pengguna: pengguna,
-                                navy: navy,
-                                cardBlue: cardBlue,
-                                isCompact: isCompact,
-                              )
+                            ? (isLoading
+                                  ? const Center(
+                                      child: CircularProgressIndicator(),
+                                    )
+                                  : (error != null
+                                        ? Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 24,
+                                            ),
+                                            child: Center(
+                                              child: Text(
+                                                'Error: $error',
+                                                style: TextStyle(color: navy),
+                                              ),
+                                            ),
+                                          )
+                                        : PenggunaWidget(
+                                            pengguna: users,
+                                            navy: navy,
+                                            cardBlue: cardBlue,
+                                            isCompact: isCompact,
+                                          )))
                             : AssessmentWidget(),
                       ),
                       const SizedBox(height: 24),
                     ],
                   ),
                 ),
+                if (isLoading) const Center(child: CircularProgressIndicator()),
               ],
             );
           },
         ),
       ),
+
       bottomNavigationBar: _selectedTab == 0
           ? SafeArea(
               minimum: const EdgeInsets.fromLTRB(24, 8, 24, 18),
@@ -447,13 +386,29 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                 child: SizedBox(
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: () {
-                      _showAddPenggunaModal(
+                    onPressed: () async {
+                      final created = await AddUserDialog.show(
                         context: context,
                         isCompact: MediaQuery.of(context).size.width < 380,
                         navy: navy,
                         cardBlue: cardBlue,
+                        onCreate:
+                            ({
+                              required String username,
+                              required String email,
+                              required String password,
+                              required String role,
+                            }) async {
+                              await createUser(
+                                username: username,
+                                email: email,
+                                password: password,
+                                role: role,
+                              );
+                            },
                       );
+
+                      if (created == true) await fetchUsers();
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: navy,
