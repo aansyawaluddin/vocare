@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:vocare/common/type.dart';
 import 'package:vocare/page/login/login.dart';
+import 'package:vocare/page/perawat/laporan.dart';
 import 'package:vocare/page/perawat/laporan/upload_lab.dart';
 import 'package:vocare/widgets/inap.dart';
-import 'package:vocare/widgets/laporan.dart';
 
 class HomePerawatPage extends StatefulWidget {
   const HomePerawatPage({required this.user, super.key});
@@ -23,11 +23,8 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
     'ICU',
     'PICU/NICU',
   ];
-
-  final List<Map<String, String>> reports = List.generate(
-    5,
-    (index) => {'name': 'Budi Santoso', 'date': '30 Agustus 2025'},
-  );
+  
+  // Data statis 'reports' telah dihapus dari sini
 
   final List<Map<String, String>> inpatients = List.generate(6, (index) {
     return {
@@ -91,9 +88,7 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
                                     ),
                                   ),
                                 ),
-
                                 const SizedBox(width: 12),
-
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -118,13 +113,10 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
                                     ],
                                   ),
                                 ),
-
                                 GestureDetector(
                                   onTapDown: (TapDownDetails details) async {
                                     final RenderBox overlay =
-                                        Overlay.of(
-                                              context,
-                                            ).context.findRenderObject()
+                                        Overlay.of(context).context.findRenderObject()
                                             as RenderBox;
                                     await showMenu(
                                       color: Color(0xFFD7E2FD),
@@ -177,9 +169,7 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
                                 ),
                               ],
                             ),
-
                             const SizedBox(height: 14),
-
                             // Segmented control (tabs)
                             Container(
                               padding: const EdgeInsets.all(4),
@@ -219,7 +209,6 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
                                       ),
                                     ),
                                   ),
-
                                   Expanded(
                                     child: GestureDetector(
                                       onTap: () =>
@@ -256,19 +245,12 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 18),
-
                       // Content: show based on active tab
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 18.0),
                         child: _selectedTab == 0
-                            ? LaporanWidget(
-                                reports: reports,
-                                navy: navy,
-                                cardBlue: cardBlue,
-                                isCompact: isCompact,
-                              )
+                            ? RiwayatLaporan(user: widget.user) 
                             : PasienInapWidget(
                                 rooms: rooms,
                                 inpatients: inpatients,
@@ -278,7 +260,6 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
                                 isCompact: isCompact,
                               ),
                       ),
-
                       const SizedBox(height: 24),
                     ],
                   ),
@@ -288,7 +269,6 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
           },
         ),
       ),
-
       bottomNavigationBar: _selectedTab == 0
           ? SafeArea(
               minimum: const EdgeInsets.fromLTRB(24, 8, 24, 18),

@@ -10,7 +10,6 @@ import 'package:vocare/widgets/perawat/report_widgets.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
-
 import 'package:vocare/page/perawat/laporan/cppt.dart';
 
 class VocareReport2 extends StatefulWidget {
@@ -172,7 +171,8 @@ class _VocareReport2State extends State<VocareReport2> {
           'Authorization header set (partial): ${widget.token!.substring(0, widget.token!.length > 8 ? 8 : widget.token!.length)}...',
         );
     } else {
-      if (kDebugMode) debugPrint('No token available; Authorization header NOT set.');
+      if (kDebugMode)
+        debugPrint('No token available; Authorization header NOT set.');
     }
     return headers;
   }
@@ -193,7 +193,8 @@ class _VocareReport2State extends State<VocareReport2> {
         body: body,
       );
 
-      if (kDebugMode) debugPrint('CreatePatient response ${resp.statusCode}: ${resp.body}');
+      if (kDebugMode)
+        debugPrint('CreatePatient response ${resp.statusCode}: ${resp.body}');
 
       if (resp.statusCode == 200 ||
           resp.statusCode == 201 ||
@@ -201,19 +202,25 @@ class _VocareReport2State extends State<VocareReport2> {
         if (resp.body.isEmpty) return null;
         final Map<String, dynamic> data = jsonDecode(resp.body);
         if (data.containsKey('id'))
-          return (data['id'] is int) ? data['id'] : int.tryParse(data['id'].toString());
+          return (data['id'] is int)
+              ? data['id']
+              : int.tryParse(data['id'].toString());
         if (data.containsKey('patient_id'))
-          return (data['patient_id'] is int) ? data['patient_id'] : int.tryParse(data['patient_id'].toString());
+          return (data['patient_id'] is int)
+              ? data['patient_id']
+              : int.tryParse(data['patient_id'].toString());
         for (final v in data.values) {
           if (v is int) return v;
-          if (v is Map && v['id'] != null) return int.tryParse(v['id'].toString());
+          if (v is Map && v['id'] != null)
+            return int.tryParse(v['id'].toString());
         }
         return null;
       } else {
         String msg = resp.body;
         try {
           final parsed = jsonDecode(resp.body);
-          if (parsed is Map && parsed['message'] != null) msg = parsed['message'].toString();
+          if (parsed is Map && parsed['message'] != null)
+            msg = parsed['message'].toString();
         } catch (_) {}
         throw Exception('Create patient failed: ${resp.statusCode} - $msg');
       }
@@ -250,7 +257,8 @@ class _VocareReport2State extends State<VocareReport2> {
         body: body,
       );
 
-      if (kDebugMode) debugPrint('CreateCPPT response ${resp.statusCode}: ${resp.body}');
+      if (kDebugMode)
+        debugPrint('CreateCPPT response ${resp.statusCode}: ${resp.body}');
 
       if (resp.statusCode == 200 ||
           resp.statusCode == 201 ||
@@ -262,7 +270,8 @@ class _VocareReport2State extends State<VocareReport2> {
         String msg = resp.body;
         try {
           final parsed = jsonDecode(resp.body);
-          if (parsed is Map && parsed['message'] != null) msg = parsed['message'].toString();
+          if (parsed is Map && parsed['message'] != null)
+            msg = parsed['message'].toString();
         } catch (_) {}
         throw Exception('Create CPPT failed: ${resp.statusCode} - $msg');
       }
@@ -430,8 +439,8 @@ class _VocareReport2State extends State<VocareReport2> {
           child: _signatureBytes != null
               ? Image.memory(_signatureBytes!, fit: BoxFit.contain)
               : _signatureFile != null
-                  ? Image.file(_signatureFile!, fit: BoxFit.contain)
-                  : const SizedBox.shrink(),
+              ? Image.file(_signatureFile!, fit: BoxFit.contain)
+              : const SizedBox.shrink(),
         ),
       ),
     );
@@ -608,9 +617,14 @@ class _VocareReport2State extends State<VocareReport2> {
       // parse cppt id dari response
       int? cpptId;
       if (cpptResp != null) {
-        if (cpptResp['id'] != null) cpptId = int.tryParse(cpptResp['id'].toString());
-        if (cpptId == null && cpptResp['cppt_id'] != null) cpptId = int.tryParse(cpptResp['cppt_id'].toString());
-        if (cpptId == null && cpptResp['data'] is Map && cpptResp['data']['id'] != null) cpptId = int.tryParse(cpptResp['data']['id'].toString());
+        if (cpptResp['id'] != null)
+          cpptId = int.tryParse(cpptResp['id'].toString());
+        if (cpptId == null && cpptResp['cppt_id'] != null)
+          cpptId = int.tryParse(cpptResp['cppt_id'].toString());
+        if (cpptId == null &&
+            cpptResp['data'] is Map &&
+            cpptResp['data']['id'] != null)
+          cpptId = int.tryParse(cpptResp['data']['id'].toString());
       }
 
       // sukses -> notify dan lanjut ke VocareReport3
@@ -623,25 +637,27 @@ class _VocareReport2State extends State<VocareReport2> {
         );
 
         if (cpptId != null) {
-          // navigate and pass cppt id + token
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => VocareReport3(
                 cpptId: cpptId ?? 0,
                 token: widget.token,
+                patientId: patientId,
+                perawatId: perawatId,
+                query: widget.reportText,
               ),
             ),
           );
         } else {
-          // jika id tidak ditemukan, tetap navigasi tanpa id (fallback)
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => VocareReport3(
-                cpptId: 0,
-                token: widget.token,
-              ),
+              builder: (context) =>
+                  VocareReport3(cpptId: 0, token: widget.token,
+                  patientId: patientId,     // <-- TAMBAHKAN (ambil dari variabel patientId di fungsi ini)
+            perawatId: perawatId,     // <-- TAMBAHKAN (ambil dari variabel perawatId di fungsi ini)
+            query: widget.reportText,),
             ),
           );
         }
@@ -657,9 +673,6 @@ class _VocareReport2State extends State<VocareReport2> {
     }
   }
 
-  // ===========================
-  // UI build
-  // ===========================
   @override
   Widget build(BuildContext context) {
     final extractedFields = _cachedExtractedFields ?? {};
@@ -742,7 +755,11 @@ class _VocareReport2State extends State<VocareReport2> {
                     )
                   : const Text(
                       'CPPT',
-                      style: TextStyle(fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
                     ),
             ),
           ),
@@ -751,6 +768,3 @@ class _VocareReport2State extends State<VocareReport2> {
     );
   }
 }
-
-
-

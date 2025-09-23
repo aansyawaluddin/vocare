@@ -1,19 +1,25 @@
-import 'dart:io';
-import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/services.dart';
-import 'package:vocare/widgets/perawat/report_utils.dart';
-import 'package:vocare/widgets/perawat/report_widgets.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:vocare/page/perawat/laporan/laporan.dart';
+
 class VocareReport3 extends StatefulWidget {
   final int cpptId;
+  final int patientId;
+  final int perawatId;
+  final String query;
   final String? token;
 
-  const VocareReport3({super.key, required this.cpptId, this.token});
+  const VocareReport3({
+    super.key,
+    required this.cpptId,
+    required this.patientId,
+    required this.perawatId,
+    required this.query,
+    this.token,
+  });
 
   @override
   State<VocareReport3> createState() => _VocareReport3State();
@@ -27,6 +33,8 @@ class _VocareReport3State extends State<VocareReport3> {
 
   Map<String, dynamic>? _cpptData;
   bool _isLoading = false;
+  bool _isLoadingCppt = false;
+  bool _isPostingLaporan = false;
   String? _error;
 
   @override
@@ -36,7 +44,9 @@ class _VocareReport3State extends State<VocareReport3> {
   }
 
   String _baseUrlFromEnv() {
-    return dotenv.env['API_BASE_URL'] ?? dotenv.env['API_URL'] ?? 'http://your-api-host';
+    return dotenv.env['API_BASE_URL'] ??
+        dotenv.env['API_URL'] ??
+        'http://your-api-host';
   }
 
   Map<String, String> _buildHeaders() {
@@ -79,7 +89,8 @@ class _VocareReport3State extends State<VocareReport3> {
         String msg = resp.body;
         try {
           final parsed = jsonDecode(resp.body);
-          if (parsed is Map && parsed['message'] != null) msg = parsed['message'].toString();
+          if (parsed is Map && parsed['message'] != null)
+            msg = parsed['message'].toString();
         } catch (_) {}
         setState(() {
           _error = 'Gagal mengambil CPPT: ${resp.statusCode} - $msg';
@@ -93,6 +104,77 @@ class _VocareReport3State extends State<VocareReport3> {
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _postLaporan() async {
+    setState(() => _isPostingLaporan = true);
+
+    final url = '${_baseUrlFromEnv()}/laporan/';
+    final headers = _buildHeaders();
+    final body = jsonEncode({
+      "cppt_id": widget.cpptId,
+      "patient_id": widget.patientId,
+      "perawat_id": widget.perawatId,
+      "query": widget.query,
+    });
+
+    try {
+      if (kDebugMode) debugPrint('POST $url -> $body');
+      final response = await http.post(
+        Uri.parse(url),
+        headers: headers,
+        body: body,
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final Map<String, dynamic> data = jsonDecode(response.body);
+
+        // Ekstrak ID Laporan dari response
+        int? laporanId;
+        if (data.containsKey('id')) {
+          laporanId = int.tryParse(data['id'].toString());
+        } else if (data.containsKey('data') &&
+            data['data'] is Map &&
+            data['data']['id'] != null) {
+          laporanId = int.tryParse(data['data']['id'].toString());
+        }
+
+        if (laporanId == null) {
+          throw Exception('Gagal mendapatkan ID Laporan dari response server.');
+        }
+
+        // Navigasi ke halaman Laporan dengan ID baru
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                VocareLaporan(laporanId: laporanId!, token: widget.token),
+          ),
+        );
+      } else {
+        String msg = response.body;
+        try {
+          final parsed = jsonDecode(response.body);
+          if (parsed is Map && parsed['message'] != null)
+            msg = parsed['message'].toString();
+        } catch (_) {}
+        throw Exception(
+          'Gagal mengirim laporan (${response.statusCode}): $msg',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isPostingLaporan = false);
+      }
     }
   }
 
@@ -149,7 +231,8 @@ class _VocareReport3State extends State<VocareReport3> {
 
     if (_isLoading) return const Center(child: CircularProgressIndicator());
     if (_error != null) return Center(child: Text(_error!));
-    if (_cpptData == null) return const Center(child: Text('Tidak ada data CPPT'));
+    if (_cpptData == null)
+      return const Center(child: Text('Tidak ada data CPPT'));
 
     final d = _cpptData!;
 
@@ -275,9 +358,7 @@ class _VocareReport3State extends State<VocareReport3> {
         ),
         backgroundColor: const Color(0xFFD7E2FD),
       ),
-      body: SafeArea(
-        child: _buildBody(),
-      ),
+     body: SafeArea(child: _buildBody()),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(20, 8, 20, 18),
         child: Padding(
@@ -285,23 +366,26 @@ class _VocareReport3State extends State<VocareReport3> {
           child: SizedBox(
             height: 56,
             child: ElevatedButton.icon(
-              onPressed: () {
-                debugPrint('Menyimpan report');
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Report tersimpan')),
-                );
-              },
-              icon: const Icon(Icons.save, color: Colors.white),
-              label: const Text(
-                'Save',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+              onPressed: (_isLoadingCppt || _isPostingLaporan) ? null : _postLaporan,
+              icon: _isPostingLaporan
+                  ? Container(
+                      width: 24,
+                      height: 24,
+                      padding: const EdgeInsets.all(2.0),
+                      child: const CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 3,
+                      ),
+                    )
+                  : const Icon(Icons.send),
+              label: Text(
+                _isPostingLaporan ? 'Mengirim...' : 'Buat Laporan',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: buttonSave,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 elevation: 0,
               ),
             ),

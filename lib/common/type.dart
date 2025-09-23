@@ -296,6 +296,7 @@ class Laporan {
     required this.tindakanLanjutan,
     required this.slki,
     required this.siki,
+    required this.sdki
   });
 
   factory Laporan.fromJson(Map<String, dynamic> json) {
@@ -321,6 +322,7 @@ class Laporan {
       ),
       slki: _s(json['SLKI'] ?? json['slki']),
       siki: _s(json['SIKI'] ?? json['siki']),
+      sdki: _s(json['SDKI'] ?? json['sdki']),
     );
   }
 
@@ -339,6 +341,7 @@ class Laporan {
   final String tindakanLanjutan;
   final String slki;
   final String siki;
+  final String sdki;
 
   Map<String, dynamic> toJson() {
     return {
@@ -357,6 +360,7 @@ class Laporan {
       'tindakan_lanjutan': tindakanLanjutan,
       'SLKI': slki,
       'SIKI': siki,
+      'SDKI': sdki,
     };
   }
 }
