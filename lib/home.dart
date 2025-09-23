@@ -32,7 +32,7 @@ class RoleConfig {
     Role.admin: RoleConfig(
       pages: (user, thisContext) => [HomeAdminPage(user: user)],
     ),
-    Role.ketuaTim: RoleConfig(
+    Role.editor: RoleConfig(
       pages: (user, thisContext) => [HomeKetuaTimPage(user: user)],
     ),
     Role.perawat: RoleConfig(

@@ -1,4 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
 
 class AddUserDialog extends StatefulWidget {
   const AddUserDialog({
@@ -6,31 +10,17 @@ class AddUserDialog extends StatefulWidget {
     required this.isCompact,
     required this.navy,
     required this.cardBlue,
-    required this.onCreate,
   });
 
   final bool isCompact;
   final Color navy;
   final Color cardBlue;
 
-  final Future<void> Function({
-    required String username,
-    required String email,
-    required String password,
-    required String role,
-  }) onCreate;
-  
   static Future<bool?> show({
     required BuildContext context,
     required bool isCompact,
     required Color navy,
     required Color cardBlue,
-    required Future<void> Function({
-      required String username,
-      required String email,
-      required String password,
-      required String role,
-    }) onCreate,
   }) {
     return showDialog<bool>(
       context: context,
@@ -39,7 +29,6 @@ class AddUserDialog extends StatefulWidget {
         isCompact: isCompact,
         navy: navy,
         cardBlue: cardBlue,
-        onCreate: onCreate,
       ),
     );
   }
@@ -53,19 +42,59 @@ class _AddUserDialogState extends State<AddUserDialog> {
   final namaCtrl = TextEditingController();
   final emailCtrl = TextEditingController();
   final passwordCtrl = TextEditingController();
-  String? selectedRole;
+  String selectedRole = 'Perawat';
   bool submitting = false;
   String? errorMsg;
 
   final Map<String, String> roleMap = {
     'Admin': 'admin',
-    'Perawat': 'perawat',
-    'Ketua Tim': 'ketuaTim',
+    'Perawat': 'user', 
+    'Ketua Tim': 'ketim',
   };
+
+  Future<void> _createUserOnServer({
+    required String username,
+    required String email,
+    required String password,
+    required String role,
+  }) async {
+    const storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'access_token');
+    if (token == null) {
+      throw Exception('No access token found. Silakan login ulang.');
+    }
+
+    final body = json.encode({
+      'username': username,
+      'email': email,
+      'password': password,
+      'role': role,
+    });
+
+    final resp = await http.post(
+      Uri.parse("${dotenv.env['API_URL']}/auth/register"),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: body,
+    );
+
+    if (resp.statusCode >= 200 && resp.statusCode < 300) {
+      return;
+    } else {
+      String serverMsg = resp.body;
+      try {
+        final js = json.decode(resp.body);
+        if (js is Map && js['message'] != null) serverMsg = js['message'].toString();
+      } catch (_) {}
+      throw Exception('Gagal menambahkan pengguna: ${resp.statusCode} - $serverMsg');
+    }
+  }
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    final rolePayload = roleMap[selectedRole ?? 'Perawat'] ?? 'perawat';
+    final rolePayload = roleMap[selectedRole] ?? 'user';
 
     setState(() {
       submitting = true;
@@ -73,15 +102,13 @@ class _AddUserDialogState extends State<AddUserDialog> {
     });
 
     try {
-      // panggil callback dari Home (yang melakukan API)
-      await widget.onCreate(
+      await _createUserOnServer(
         username: namaCtrl.text.trim(),
         email: emailCtrl.text.trim(),
         password: passwordCtrl.text,
         role: rolePayload,
       );
 
-      // bila sukses, kembalikan true supaya home bisa fetch ulang
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setState(() {
@@ -110,10 +137,7 @@ class _AddUserDialogState extends State<AddUserDialog> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.12),
-                  blurRadius: 12,
-                ),
+                BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 12),
               ],
             ),
             child: Form(
@@ -123,14 +147,12 @@ class _AddUserDialogState extends State<AddUserDialog> {
                 children: [
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Tambah Pengguna',
-                      style: TextStyle(
-                        fontSize: widget.isCompact ? 16 : 18,
-                        fontWeight: FontWeight.w700,
-                        color: widget.navy,
-                      ),
-                    ),
+                    child: Text('Tambah Pengguna',
+                        style: TextStyle(
+                          fontSize: widget.isCompact ? 16 : 18,
+                          fontWeight: FontWeight.w700,
+                          color: widget.navy,
+                        )),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -155,7 +177,9 @@ class _AddUserDialogState extends State<AddUserDialog> {
                     value: selectedRole,
                     items: roleMap.keys.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
                     decoration: const InputDecoration(labelText: 'Role'),
-                    onChanged: (v) => setState(() => selectedRole = v),
+                    onChanged: (v) {
+                      if (v != null) setState(() => selectedRole = v);
+                    },
                     validator: (v) => (v == null || v.isEmpty) ? 'Pilih role' : null,
                   ),
                   const SizedBox(height: 12),
@@ -169,10 +193,7 @@ class _AddUserDialogState extends State<AddUserDialog> {
                   if (errorMsg != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8.0),
-                      child: Text(
-                        errorMsg!,
-                        style: const TextStyle(color: Colors.red, fontSize: 12),
-                      ),
+                      child: Text(errorMsg!, style: const TextStyle(color: Colors.red, fontSize: 12)),
                     ),
                   SizedBox(
                     width: double.infinity,

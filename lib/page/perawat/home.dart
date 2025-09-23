@@ -109,7 +109,7 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        'Welcome Aan',
+                                        'Welcome ${widget.user.username}',
                                         style: TextStyle(
                                           color: Colors.white.withOpacity(0.95),
                                           fontSize: isCompact ? 13 : 14,

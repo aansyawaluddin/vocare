@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:vocare/common/type.dart';
-import 'package:vocare/page/perawat/laporan/report1.dart';
+import 'package:vocare/page/perawat/laporan/review.dart';
 
 enum VoiceState { initial, listening, processing }
 
@@ -115,7 +115,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                 status == 'done' ||
                 status == 'stopped') {
               _isListening = false;
-              // hentikan animasi
               try {
                 _animController.stop();
               } catch (_) {}
@@ -126,7 +125,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
           debugPrint('Speech error callback: $error');
           String msg = 'Unknown error';
           try {
-            msg = error.errorMsg ?? error.toString();
           } catch (_) {
             msg = error.toString();
           }
@@ -241,9 +239,15 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                 ? finalTranscript
                 : 'Tidak ada teks yang dikenali.';
             if (!mounted) return;
+
+            // <-- PERBAIKAN: tambahkan username & token dari widget.user
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => VocareReport(reportText: toShow),
+                builder: (_) => VocareReport(
+                  reportText: toShow,
+                  username: widget.user.username,
+                  token: widget.user.token,
+                ),
               ),
             );
 
@@ -293,7 +297,13 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
       // navigasi ke report
       if (!mounted) return;
       Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => VocareReport(reportText: toShow)),
+        MaterialPageRoute(
+          builder: (_) => VocareReport(
+            reportText: toShow,
+            username: widget.user.username,
+            token: widget.user.token,
+          ),
+        ),
       );
 
       // kembali ke state awal pada halaman voice

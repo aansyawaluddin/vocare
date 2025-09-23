@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -17,18 +18,19 @@ class Login extends StatefulWidget {
   State<Login> createState() => _LoginState();
 }
 
-Future<User> login(String username, String password) async {
+Future<User> loginRequest(String username, String password) async {
   try {
+    // pastikan dotenv ter-load
     if (!dotenv.isInitialized) {
       await dotenv.load(fileName: '.env');
     }
 
-    final apiBase = dotenv.env['API_URL'];
+    final apiBase = dotenv.env['API_URL'] ?? dotenv.env['API_BASE_URL'];
     if (apiBase == null || apiBase.isEmpty) {
       throw Exception('NO_API');
     }
 
-    final storage = FlutterSecureStorage();
+    final storage = const FlutterSecureStorage();
     final apiUrl = "$apiBase/auth/login";
 
     final response = await http
@@ -37,7 +39,7 @@ Future<User> login(String username, String password) async {
           headers: {'Content-Type': 'application/json'},
           body: json.encode({'username': username, 'password': password}),
         )
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 15));
 
     if (response.body == null || response.body.isEmpty) {
       if (response.statusCode == 401) throw Exception('invalid_credentials');
@@ -52,16 +54,14 @@ Future<User> login(String username, String password) async {
     }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
+      // ambil token dari beberapa struktur kemungkinan
       String? accessToken;
       if (responseData is Map) {
-        accessToken =
-            (responseData['access_token'] ?? responseData['token'])
-                ?.toString() ??
-            (responseData['data'] is Map
-                ? (responseData['data']['access_token'] ??
-                          responseData['data']['token'])
-                      ?.toString()
-                : null);
+        accessToken = (responseData['access_token'] ?? responseData['token'])?.toString();
+        // ada kemungkinan token ada di nested data
+        if ((accessToken == null || accessToken.isEmpty) && responseData['data'] is Map) {
+          accessToken = (responseData['data']['access_token'] ?? responseData['data']['token'])?.toString();
+        }
       }
 
       if (accessToken != null && accessToken.isNotEmpty) {
@@ -71,11 +71,8 @@ Future<User> login(String username, String password) async {
       // ambil object user dari berbagai struktur
       dynamic userJson;
       if (responseData is Map) {
-        userJson =
-            responseData['user'] ??
-            (responseData['data'] is Map
-                ? responseData['data']['user']
-                : null) ??
+        userJson = responseData['user'] ??
+            (responseData['data'] is Map ? responseData['data']['user'] : null) ??
             responseData;
       } else {
         userJson = responseData;
@@ -85,10 +82,11 @@ Future<User> login(String username, String password) async {
         throw Exception('Response tidak berisi informasi user');
       }
 
+      // pastikan mengembalikan User yang menyertakan token (dari accessToken variable)
       if (userJson is Map<String, dynamic>) {
-        return User.fromJson(userJson);
+        return User.fromJson(userJson, token: accessToken);
       } else if (userJson is Map) {
-        return User.fromJson(Map<String, dynamic>.from(userJson));
+        return User.fromJson(Map<String, dynamic>.from(userJson), token: accessToken);
       } else {
         throw Exception('Format user tidak valid');
       }
@@ -115,8 +113,8 @@ class _LoginState extends State<Login> {
 
   bool _isLoading = false;
 
-  void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  void _showSnack(String msg, {Color bg = Colors.red}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: bg));
   }
 
   @override
@@ -131,23 +129,26 @@ class _LoginState extends State<Login> {
     final password = _passwordController.text.trim();
 
     if (username.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('username dan password harus diisi'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showSnack('username dan password harus diisi');
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      final user = await login(username, password);
+      final user = await loginRequest(username, password);
+
       if (!mounted) return;
       FocusScope.of(context).unfocus();
-      
-      
+
+      // debug: cek token
+      if (user.token.isNotEmpty) {
+        if (kDebugMode) debugPrint('Login sukses. Token (partial): ${user.token.substring(0, user.token.length > 12 ? 12 : user.token.length)}...');
+      } else {
+        if (kDebugMode) debugPrint('Login sukses tetapi token kosong di objek User.');
+      }
+
+      // navigasi ke Home — pastikan Home menerima parameter user
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -164,15 +165,7 @@ class _LoginState extends State<Login> {
         errorMessage = errorMessage.replaceAll('Exception: ', '');
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMessage,
-            style: const TextStyle(color: Colors.white),
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showSnack(errorMessage);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

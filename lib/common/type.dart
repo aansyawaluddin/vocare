@@ -1,4 +1,4 @@
-enum Role { admin, ketuaTim, perawat }
+enum Role { admin, editor, perawat }
 
 class User {
   User({
@@ -6,49 +6,75 @@ class User {
     required this.username,
     required this.role,
     required this.email,
+    required this.token,
   });
 
-  factory User.fromJson(Map<String, dynamic> json) {
-    final id = json['id']?.toString() ?? '';
-    final username = json['username']?.toString() ?? '';
-    final email = json['email']?.toString() ?? '';
+  /// Buat User dari JSON. Jika token tersedia (mis. dari response login), bisa diteruskan lewat parameter token.
+  factory User.fromJson(Map<String, dynamic> json, {String? token}) {
+    String _s(Object? v) => v?.toString() ?? '';
 
-    String rawRole = (json['role'] ?? '').toString().toLowerCase();
+    final idStr = json['id'] ?? json['user_id'] ?? json['userId'];
+    final id = _s(idStr);
+
+    final username = _s(json['username'] ?? json['user'] ?? json['name']);
+    final email = _s(json['email'] ?? json['user_email']);
+
+    String rawRole = _s(json['role']).toLowerCase();
     rawRole = rawRole.replaceAll(RegExp(r'[^a-z0-9]'), '');
 
     const roleMap = <String, Role>{
       'admin': Role.admin,
-      'administrator': Role.admin,
-      'ketuatim': Role.ketuaTim,
-      'ketua': Role.ketuaTim,
+      'editor': Role.editor,
+      'ketim': Role.editor,
+      'user': Role.perawat,
       'perawat': Role.perawat,
     };
 
     final role = roleMap[rawRole] ?? Role.perawat;
 
-    return User(id: id, username: username, role: role, email: email);
+    final tokFromJson = _s(
+      json['token'] ?? json['access_token'] ?? json['accessToken'],
+    );
+    final finalToken = (token != null && token.isNotEmpty)
+        ? token
+        : (tokFromJson.isNotEmpty ? tokFromJson : '');
+
+    return User(
+      id: id,
+      username: username,
+      role: role,
+      email: email,
+      token: finalToken,
+    );
   }
 
   final String id;
   final String username;
   final Role role;
   final String email;
+  final String token;
 
   Map<String, dynamic> toJson() {
     String roleOut;
     switch (role) {
       case Role.admin:
-        roleOut = 'admin';
+        roleOut = 'Admin';
         break;
-      case Role.ketuaTim:
-        roleOut = 'ketuaTim';
+      case Role.editor:
+        roleOut = 'Ketua Tim';
         break;
       case Role.perawat:
-        roleOut = 'perawat';
+        roleOut = 'Perawat';
         break;
     }
 
-    return {'id': id, 'username': username, 'role': roleOut, 'email': email};
+    return {
+      'id': id,
+      'username': username,
+      'role': roleOut,
+      'email': email,
+      'token': token,
+    };
   }
 }
 

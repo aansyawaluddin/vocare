@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:vocare/page/perawat/laporan/report2.dart';
+import 'package:vocare/page/perawat/laporan/assesments.dart';
 
 class VocareReportInap extends StatefulWidget {
   final String reportText;
