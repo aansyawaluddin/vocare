@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'package:intl/date_symbol_data_local.dart';
 import 'package:vocare/common/type.dart';
 import 'package:vocare/widgets/laporan_widget.dart';
 
@@ -148,8 +147,6 @@ class _RiwayatLaporanState extends State<RiwayatLaporan> {
       );
     }
 
-    // Gunakan widget LaporanWidget yang sudah ada
-    // Asumsi LaporanWidget bisa menerima List<Map<String, String>>
     return LaporanWidget(
       reports: _reportsForUI,
       navy: navyColor,

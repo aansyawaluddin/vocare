@@ -1,20 +1,22 @@
+// lib/page/perawat/inap/voice.dart
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:vocare/common/type.dart';
-import 'package:vocare/page/perawat/inap/report.dart';
+import 'package:vocare/page/perawat/inap/review.dart';
 
 enum VoiceState { initial, listening, processing }
 
-class VoicePageLaporanInap extends StatefulWidget {
-  const VoicePageLaporanInap({required this.user, super.key});
+class VoicePageLaporanTambahan extends StatefulWidget {
+  const VoicePageLaporanTambahan({super.key, required this.user, required this.patientId});
   final User user;
+  final String patientId;
   @override
-  State<VoicePageLaporanInap> createState() => _VoicePageLaporanInapState();
+  State<VoicePageLaporanTambahan> createState() => _VoicePageLaporanState();
 }
 
-class _VoicePageLaporanInapState extends State<VoicePageLaporanInap>
+class _VoicePageLaporanState extends State<VoicePageLaporanTambahan>
     with SingleTickerProviderStateMixin {
   final SpeechToText _speech = SpeechToText();
   bool _speechEnabled = false;
@@ -38,7 +40,11 @@ class _VoicePageLaporanInapState extends State<VoicePageLaporanInap>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    _initSpeech();
+
+    // inisialisasi speech setelah frame pertama — mencegah showDialog di initState
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initSpeech();
+    });
   }
 
   Future<bool> _ensureMicrophonePermission() async {
@@ -115,7 +121,6 @@ class _VoicePageLaporanInapState extends State<VoicePageLaporanInap>
                 status == 'done' ||
                 status == 'stopped') {
               _isListening = false;
-              // hentikan animasi
               try {
                 _animController.stop();
               } catch (_) {}
@@ -126,7 +131,7 @@ class _VoicePageLaporanInapState extends State<VoicePageLaporanInap>
           debugPrint('Speech error callback: $error');
           String msg = 'Unknown error';
           try {
-            msg = error.errorMsg ?? error.toString();
+            msg = error.errorMsg;
           } catch (_) {
             msg = error.toString();
           }
@@ -201,7 +206,6 @@ class _VoicePageLaporanInapState extends State<VoicePageLaporanInap>
         _text = '';
       });
 
-      // mulai animasi visualizer
       try {
         _animController.repeat();
       } catch (_) {}
@@ -221,7 +225,6 @@ class _VoicePageLaporanInapState extends State<VoicePageLaporanInap>
               await _speech.stop();
             } catch (_) {}
 
-            // hentikan animasi saat proses
             try {
               _animController.stop();
             } catch (_) {}
@@ -233,17 +236,17 @@ class _VoicePageLaporanInapState extends State<VoicePageLaporanInap>
               _text = 'Memproses hasil...';
             });
 
-            // simulasi processing
             await Future.delayed(const Duration(seconds: 1));
             if (!mounted) return;
 
-            final toShow = finalTranscript.isNotEmpty
-                ? finalTranscript
-                : 'Tidak ada teks yang dikenali.';
-            if (!mounted) return;
+            // Navigasi ke ReviewTambahan menggunakan objek User
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => VocareReportInap(reportText: toShow),
+                builder: (_) => ReviewTambahan(
+                  user: widget.user,
+                  reportText: finalTranscript,
+                  patientId: widget.patientId,
+                ),
               ),
             );
 
@@ -257,7 +260,7 @@ class _VoicePageLaporanInapState extends State<VoicePageLaporanInap>
         },
         localeId: 'id-ID',
         listenFor: const Duration(seconds: 900),
-        pauseFor: const Duration(seconds: 8),
+        pauseFor: const Duration(seconds: 30),
         partialResults: true,
         cancelOnError: true,
       );
@@ -273,7 +276,6 @@ class _VoicePageLaporanInapState extends State<VoicePageLaporanInap>
         _text = 'Memproses hasil...';
       });
 
-      // hentikan animasi saat memproses hasil
       try {
         _animController.stop();
       } catch (_) {}
@@ -282,21 +284,22 @@ class _VoicePageLaporanInapState extends State<VoicePageLaporanInap>
         await _speech.stop();
       } catch (_) {}
 
-      // simulasi processing
       await Future.delayed(const Duration(milliseconds: 800));
       if (!mounted) return;
 
-      final toShow = captured.isNotEmpty
-          ? captured
-          : 'Tidak ada teks yang dikenali.';
+      final toShow = captured.isNotEmpty ? captured : 'Tidak ada teks yang dikenali.';
 
-      // navigasi ke report
       if (!mounted) return;
       Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => VocareReportInap(reportText: toShow)),
+        MaterialPageRoute(
+          builder: (_) => ReviewTambahan(
+            user: widget.user,
+            reportText: toShow,
+            patientId: widget.patientId,
+          ),
+        ),
       );
 
-      // kembali ke state awal pada halaman voice
       safeSetState(() {
         _state = VoiceState.initial;
         _statusText = 'ready';
@@ -404,12 +407,12 @@ class _VoicePageLaporanInapState extends State<VoicePageLaporanInap>
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'Mendengarkan...',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 18,
-                    color: Color(0xFF093275),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    _text,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 18, color: Color(0xFF093275)),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -419,6 +422,7 @@ class _VoicePageLaporanInapState extends State<VoicePageLaporanInap>
                   label: const Text('Stop'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 20,
                       vertical: 12,
@@ -453,7 +457,6 @@ class _VoicePageLaporanInapState extends State<VoicePageLaporanInap>
     }
   }
 
-  // helper builder untuk satu bar kecil
   Widget _buildBar(double height) {
     return Container(
       width: 10,
@@ -470,40 +473,16 @@ class _VoicePageLaporanInapState extends State<VoicePageLaporanInap>
     return Scaffold(
       backgroundColor: const Color(0xFFD7E2FD),
       appBar: AppBar(
-        titleSpacing: 0,
-        title: const Center(
-          child: Text(
-            'Vocare Report',
-            style: TextStyle(fontSize: 20, color: Color(0xFF093275)),
-          ),
+        titleSpacing: 30,
+        title: const Text(
+          'Vocare Report',
+          style: TextStyle(fontSize: 20, color: Color(0xFF093275)),
         ),
         backgroundColor: const Color(0xFFD7E2FD),
-        elevation: 0,
       ),
       body: SafeArea(
         child: Column(
           children: [
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline, color: Color(0xFF093275)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Status: $_statusText',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                  ),
-                  if (!_speechEnabled)
-                    IconButton(
-                      onPressed: _initSpeech,
-                      icon: const Icon(Icons.refresh, color: Color(0xFF093275)),
-                    ),
-                ],
-              ),
-            ),
             const SizedBox(height: 8),
             Expanded(
               child: Center(
@@ -520,11 +499,7 @@ class _VoicePageLaporanInapState extends State<VoicePageLaporanInap>
                 vertical: 12.0,
               ),
               child: Text(
-                _statusText == 'processing'
-                    ? 'Memproses...'
-                    : _statusText.isNotEmpty
-                    ? 'Status: $_statusText'
-                    : '',
+                _isListening ? 'Mendengarkan...' : (_statusText == 'ready' ? 'Siap Merekam' : 'Status: $_statusText'),
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 14),
               ),

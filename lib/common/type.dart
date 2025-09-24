@@ -9,40 +9,53 @@ class User {
     required this.token,
   });
 
-  /// Buat User dari JSON. Jika token tersedia (mis. dari response login), bisa diteruskan lewat parameter token.
   factory User.fromJson(Map<String, dynamic> json, {String? token}) {
     String _s(Object? v) => v?.toString() ?? '';
 
-    final idStr = json['id'] ?? json['user_id'] ?? json['userId'];
-    final id = _s(idStr);
+    Map<String, dynamic>? tryMap(Object? v) {
+      if (v is Map<String, dynamic>) return v;
+      return null;
+    }
 
-    final username = _s(json['username'] ?? json['user'] ?? json['name']);
-    final email = _s(json['email'] ?? json['user_email']);
+    final Map<String, dynamic>? dataMap = tryMap(json['data']);
+    final Map<String, dynamic>? userMap = tryMap(json['user']);
 
-    String rawRole = _s(json['role']).toLowerCase();
-    rawRole = rawRole.replaceAll(RegExp(r'[^a-z0-9]'), '');
+    Object? _get(String key) {
+      if (json.containsKey(key)) return json[key];
+      if (dataMap != null && dataMap.containsKey(key)) return dataMap[key];
+      if (userMap != null && userMap.containsKey(key)) return userMap[key];
+      return null;
+    }
 
-    const roleMap = <String, Role>{
-      'admin': Role.admin,
-      'editor': Role.editor,
-      'ketim': Role.editor,
-      'user': Role.perawat,
-      'perawat': Role.perawat,
-    };
+    final id = _s(_get('id') ?? _get('user_id') ?? _get('userId') ?? _get('uid'));
+    final username = _s(_get('username') ?? _get('user') ?? _get('name'));
+    final email = _s(_get('email') ?? _get('user_email') ?? _get('email_address'));
 
-    final role = roleMap[rawRole] ?? Role.perawat;
+    // Ambil token baik dari parameter atau dari beberapa lokasi JSON
+    final tokFromJson = _s(_get('token') ?? _get('access_token') ?? _get('accessToken'));
+    final finalToken = (token != null && token.isNotEmpty) ? token : (tokFromJson.isNotEmpty ? tokFromJson : '');
 
-    final tokFromJson = _s(
-      json['token'] ?? json['access_token'] ?? json['accessToken'],
-    );
-    final finalToken = (token != null && token.isNotEmpty)
-        ? token
-        : (tokFromJson.isNotEmpty ? tokFromJson : '');
+    // Normalisasi role dan deteksi berdasarkan kata kunci (lebih robust)
+    String rawRole = _s(_get('role') ?? _get('role_name')).toLowerCase();
+    // Biarkan spasi sehingga kita bisa deteksi kata (mis. "ketua tim")
+    rawRole = rawRole.replaceAll(RegExp(r'[^a-z0-9\s]'), '').trim();
+
+    Role parsedRole;
+    if (rawRole.contains('admin')) {
+      parsedRole = Role.admin;
+    } else if (rawRole.contains('ketua') || rawRole.contains('tim') || rawRole.contains('ketim') || rawRole.contains('editor')) {
+      parsedRole = Role.editor;
+    } else if (rawRole.contains('perawat') || rawRole.contains('nurse') || rawRole.contains('user')) {
+      parsedRole = Role.perawat;
+    } else {
+      // default
+      parsedRole = Role.perawat;
+    }
 
     return User(
       id: id,
       username: username,
-      role: role,
+      role: parsedRole,
       email: email,
       token: finalToken,
     );
@@ -102,11 +115,7 @@ class Patient {
     DateTime? parseDate(Object? v) {
       final s = v?.toString();
       if (s == null || s.isEmpty) return null;
-      try {
-        return DateTime.tryParse(s);
-      } catch (_) {
-        return null;
-      }
+      return DateTime.tryParse(s);
     }
 
     return Patient(
@@ -128,9 +137,7 @@ class Patient {
       hubunganPenanggungJawab: _s(
         json['hubungan_penanggung_jawab'] ?? json['hubunganPenanggungJawab'],
       ),
-      kontakPenanggungJawab: _s(
-        json['kontak_penanggung_jawab'] ?? json['kontakPenanggungJawab'],
-      ),
+      kontakPenanggungJawab: _s(json['kontak_penanggung_jawab'] ?? json['kontakPenanggungJawab']),
       statusRawat: _s(json['status_rawat'] ?? json['statusRawat']),
     );
   }
@@ -232,8 +239,7 @@ class CPPT {
 
   factory CPPT.fromJson(Map<String, dynamic> json) {
     String _s(Object? v) => v?.toString() ?? '';
-    DateTime? parseDate(Object? v) =>
-        v == null ? null : DateTime.tryParse(v.toString());
+    DateTime? parseDate(Object? v) => v == null ? null : DateTime.tryParse(v.toString());
 
     return CPPT(
       id: _s(json['id']),
@@ -296,13 +302,12 @@ class Laporan {
     required this.tindakanLanjutan,
     required this.slki,
     required this.siki,
-    required this.sdki
+    required this.sdki,
   });
 
   factory Laporan.fromJson(Map<String, dynamic> json) {
     String _s(Object? v) => v?.toString() ?? '';
-    DateTime? parseDate(Object? v) =>
-        v == null ? null : DateTime.tryParse(v.toString());
+    DateTime? parseDate(Object? v) => v == null ? null : DateTime.tryParse(v.toString());
 
     return Laporan(
       id: _s(json['id']),
@@ -317,9 +322,7 @@ class Laporan {
       keterangan: _s(json['keterangan']),
       dokter: _s(json['dokter']),
       signature: _s(json['signature']),
-      tindakanLanjutan: _s(
-        json['tindakan_lanjutan'] ?? json['tindakanLanjutan'],
-      ),
+      tindakanLanjutan: _s(json['tindakan_lanjutan'] ?? json['tindakanLanjutan']),
       slki: _s(json['SLKI'] ?? json['slki']),
       siki: _s(json['SIKI'] ?? json['siki']),
       sdki: _s(json['SDKI'] ?? json['sdki']),

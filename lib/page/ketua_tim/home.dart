@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:vocare/common/type.dart';
 import 'package:vocare/page/login/login.dart';
-import 'package:vocare/widgets/inap.dart';
+import 'package:vocare/widgets/inap_widget.dart';
 import 'package:vocare/widgets/perawat.dart';
 
 class HomeKetuaTimPage extends StatefulWidget {
@@ -259,24 +259,24 @@ class _HomeKetuaTimPageState extends State<HomeKetuaTimPage> {
                       const SizedBox(height: 18),
 
                       // Content: show based on active tab
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 18.0),
-                        child: _selectedTab == 0
-                            ? PerawatWidget(
-                                reports: reports,
-                                navy: navy,
-                                cardBlue: cardBlue,
-                                isCompact: isCompact,
-                              )
-                            : PasienInapWidget(
-                                rooms: rooms,
-                                inpatients: inpatients,
-                                navy: navy,
-                                cardBlue: cardBlue,
-                                role: 'ketua_tim',
-                                isCompact: isCompact,
-                              ),
-                      ),
+                      // Padding(
+                      //   padding: const EdgeInsets.symmetric(horizontal: 18.0),
+                      //   child: _selectedTab == 0
+                      //       ? PerawatWidget(
+                      //           reports: reports,
+                      //           navy: navy,
+                      //           cardBlue: cardBlue,
+                      //           isCompact: isCompact,
+                      //         )
+                      //       : PasienInapWidget(
+                      //           rooms: rooms,
+                      //           inpatients: inpatients,
+                      //           navy: navy,
+                      //           cardBlue: cardBlue,
+                      //           role: 'ketua_tim',
+                      //           isCompact: isCompact,
+                      //         ),
+                      // ),
 
                       const SizedBox(height: 24),
                     ],

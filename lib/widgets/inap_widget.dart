@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:vocare/common/type.dart';
+import 'package:vocare/page/perawat/inap/riwayat_laporan.dart';
 
 class PasienInapWidget extends StatefulWidget {
   const PasienInapWidget({
@@ -7,16 +9,19 @@ class PasienInapWidget extends StatefulWidget {
     required this.inpatients,
     required this.navy,
     required this.cardBlue,
-    required this.role, 
+    required this.role,
+    required this.user,
     this.isCompact = false,
   });
 
   final List<String> rooms;
-  final List<Map<String, String>> inpatients;
+  // gunakan dynamic agar lebih fleksibel (id bisa int, dsb)
+  final List<Map<String, dynamic>> inpatients;
   final Color navy;
   final Color cardBlue;
   final bool isCompact;
   final String role;
+  final User user;
 
   @override
   State<PasienInapWidget> createState() => _PasienInapWidgetState();
@@ -36,15 +41,25 @@ class _PasienInapWidgetState extends State<PasienInapWidget> {
     return r.contains('ketua');
   }
 
+  List<Map<String, dynamic>> get _visiblePatients {
+    if (_selectedRoom == null || _selectedRoom == 'Semua Ruangan') {
+      return widget.inpatients;
+    }
+
+    final selectedLower = _selectedRoom!.toLowerCase();
+    return widget.inpatients
+        .where((p) =>
+            (p['room'] ?? '').toString().toLowerCase() == selectedLower)
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final navy = widget.navy;
     final cardBlue = widget.cardBlue;
     final isCompact = widget.isCompact;
 
-    final visible = (_selectedRoom == null || _selectedRoom == 'Semua Ruangan')
-        ? widget.inpatients
-        : widget.inpatients.where((p) => p['room'] == _selectedRoom).toList();
+    final visible = _visiblePatients;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -99,41 +114,45 @@ class _PasienInapWidgetState extends State<PasienInapWidget> {
             ),
           )
         else
-          Column(
-            children: visible
-                .map(
-                  (p) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12.0),
-                    child: InpatientCard(
-                      navy: navy,
-                      cardBlue: cardBlue,
-                      name: p['name'] ?? '-',
-                      room: p['room'] ?? '-',
-                      condition: p['condition'] ?? '-',
-                      lastAction: p['lastAction'] ?? '-',
-                      isCompact: isCompact,
-                      onTap: () {
-                        // Navigator.push(
-                        //   context,
-                        //   MaterialPageRoute(
-                        //     builder: (_) {
-                        //       if (_isKetua) {
-                        //         return ketua_page.DaftarRiwayatPage(
-                        //           reportText: p['reportText'] ?? '-',
-                        //         );
-                        //       } else {
-                        //         return perawat_page.DaftarRiwayatPage(user:,
-                        //           reportText: p['reportText'] ?? '-',
-                        //         );
-                        //       }
-                        //     },
-                        //   ),
-                        // );
-                      },
-                    ),
+
+          SizedBox(
+            height: 500,
+            child: ListView.builder(
+              padding: EdgeInsets.zero,
+              itemCount: visible.length,
+              itemBuilder: (context, index) {
+                final p = visible[index];
+                final id = p['id']?.toString() ?? '-';
+                final nama = p['nama']?.toString() ?? '-';
+                final noRm = p['no_rekam_medis']?.toString() ?? '-';
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12.0),
+                  child: InpatientCard(
+                    key: ValueKey('inpatient_$id'),
+                    navy: navy,
+                    cardBlue: cardBlue,
+                    noRekamMedis: noRm,
+                    nama: nama,
+                    jenisKelamin: p['jenis_kelamin']?.toString() ?? '-',
+                    statusRawat: p['status_rawat']?.toString() ?? '-',
+                    isCompact: isCompact,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => DaftarRiwayatPage(
+                            user: widget.user,
+                            patientId: id,
+                            patientName: nama,
+                            noRekamMedis: noRm,
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                )
-                .toList(),
+                );
+              },
+            ),
           ),
       ],
     );
@@ -145,26 +164,27 @@ class InpatientCard extends StatelessWidget {
     super.key,
     required this.navy,
     required this.cardBlue,
-    required this.name,
-    required this.room,
-    required this.condition,
-    required this.lastAction,
+    required this.noRekamMedis,
+    required this.nama,
+    required this.jenisKelamin,
+    required this.statusRawat,
     this.isCompact = false,
     this.onTap,
   });
 
   final Color navy;
   final Color cardBlue;
-  final String name;
-  final String room;
-  final String condition;
-  final String lastAction;
+  final String noRekamMedis;
+  final String nama;
+  final String jenisKelamin;
+  final String statusRawat;
   final bool isCompact;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final cardHeight = isCompact ? 120.0 : 100.0;
+    // perbaikan: compact harusnya lebih kecil
+    final cardHeight = isCompact ? 100.0 : 120.0;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -193,14 +213,16 @@ class InpatientCard extends StatelessWidget {
               child: InkWell(
                 onTap: onTap,
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 14,
+                  ),
                   height: cardHeight,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Nama : $name',
+                        'No. RM : $noRekamMedis',
                         style: TextStyle(
                           color: navy,
                           fontWeight: FontWeight.w700,
@@ -209,21 +231,21 @@ class InpatientCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Kamar : $room',
+                        'Nama : $nama',
                         style: TextStyle(
                           color: navy.withOpacity(0.95),
                           fontSize: isCompact ? 11 : 12,
                         ),
                       ),
                       Text(
-                        'Kondisi : $condition',
+                        'Jenis Kelamin : $jenisKelamin',
                         style: TextStyle(
                           color: navy.withOpacity(0.95),
                           fontSize: isCompact ? 11 : 12,
                         ),
                       ),
                       Text(
-                        'Tindakan Sebelumnya : $lastAction',
+                        'Status Rawat : $statusRawat',
                         style: TextStyle(
                           color: navy.withOpacity(0.9),
                           fontSize: isCompact ? 11 : 12,

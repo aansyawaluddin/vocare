@@ -3,7 +3,7 @@ import 'package:vocare/common/type.dart';
 import 'package:vocare/page/login/login.dart';
 import 'package:vocare/page/perawat/laporan.dart';
 import 'package:vocare/page/perawat/laporan/upload_lab.dart';
-import 'package:vocare/widgets/inap.dart';
+import 'package:vocare/page/perawat/inap.dart';
 
 class HomePerawatPage extends StatefulWidget {
   const HomePerawatPage({required this.user, super.key});
@@ -23,23 +23,11 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
     'ICU',
     'PICU/NICU',
   ];
-  
-  // Data statis 'reports' telah dihapus dari sini
-
-  final List<Map<String, String>> inpatients = List.generate(6, (index) {
-    return {
-      'name': 'Nama Pasien ${index + 1}',
-      'room': index % 3 == 0 ? 'UGD' : (index % 3 == 1 ? 'Perawatan' : 'ICU'),
-      'condition': 'Stabil',
-      'lastAction': '29/08/2025 14:30',
-    };
-  });
 
   @override
   Widget build(BuildContext context) {
     final navy = const Color(0xFF082B54);
     final lightBackground = const Color(0xFFF3F6FA);
-    final cardBlue = const Color(0xFFDCE9FF);
 
     return Scaffold(
       backgroundColor: lightBackground,
@@ -49,221 +37,207 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
             final width = constraints.maxWidth;
             final isCompact = width < 380;
 
-            return Stack(
+            return Column(
               children: [
-                SingleChildScrollView(
+                // Header (fixed)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 18,
+                  ),
+                  decoration: BoxDecoration(
+                    color: navy,
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(22),
+                    ),
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Header
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 18,
-                        ),
-                        decoration: BoxDecoration(
-                          color: navy,
-                          borderRadius: const BorderRadius.vertical(
-                            bottom: Radius.circular(22),
+                      Row(
+                        children: [
+                          Container(
+                            width: isCompact ? 40 : 44,
+                            height: isCompact ? 40 : 44,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.06),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Center(
+                              child: Icon(
+                                Icons.health_and_safety,
+                                color: Colors.white,
+                                size: isCompact ? 22 : 26,
+                              ),
+                            ),
                           ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                  width: isCompact ? 40 : 44,
-                                  height: isCompact ? 40 : 44,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.06),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Center(
-                                    child: Icon(
-                                      Icons.health_and_safety,
-                                      color: Colors.white,
-                                      size: isCompact ? 22 : 26,
-                                    ),
+                                const Text(
+                                  'vocare',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 16,
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'vocare',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Welcome ${widget.user.username}',
-                                        style: TextStyle(
-                                          color: Colors.white.withOpacity(0.95),
-                                          fontSize: isCompact ? 13 : 14,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                GestureDetector(
-                                  onTapDown: (TapDownDetails details) async {
-                                    final RenderBox overlay =
-                                        Overlay.of(context).context.findRenderObject()
-                                            as RenderBox;
-                                    await showMenu(
-                                      color: Color(0xFFD7E2FD),
-                                      context: context,
-                                      position: RelativeRect.fromRect(
-                                        details.globalPosition &
-                                            const Size(40, 40),
-                                        Offset.zero & overlay.size,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      items: [
-                                        PopupMenuItem(
-                                          child: const Text(
-                                            "Logout",
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              color: Color(0xFF093275),
-                                            ),
-                                          ),
-                                          onTap: () {
-                                            Future.delayed(
-                                              Duration.zero,
-                                              () => Navigator.pushReplacement(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (context) =>
-                                                      const Login(),
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                  child: Container(
-                                    width: 40,
-                                    height: 40,
-                                    decoration: const BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Colors.white24,
-                                    ),
-                                    child: const Icon(
-                                      Icons.person,
-                                      color: Colors.white,
-                                    ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Welcome ${widget.user.username}',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.95),
+                                    fontSize: isCompact ? 13 : 14,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 14),
-                            // Segmented control (tabs)
-                            Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: Colors.white24,
-                                borderRadius: BorderRadius.circular(30),
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: GestureDetector(
-                                      onTap: () =>
-                                          setState(() => _selectedTab = 0),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 10,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: _selectedTab == 0
-                                              ? Colors.white
-                                              : Colors.transparent,
-                                          borderRadius: BorderRadius.circular(
-                                            26,
-                                          ),
-                                        ),
-                                        child: Center(
-                                          child: Text(
-                                            'Laporan',
-                                            style: TextStyle(
-                                              color: _selectedTab == 0
-                                                  ? navy
-                                                  : Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
+                          ),
+                          GestureDetector(
+                            onTapDown: (TapDownDetails details) async {
+                              final RenderBox overlay =
+                                  Overlay.of(context).context.findRenderObject()
+                                      as RenderBox;
+                              await showMenu(
+                                color: const Color(0xFFD7E2FD),
+                                context: context,
+                                position: RelativeRect.fromRect(
+                                  details.globalPosition & const Size(40, 40),
+                                  Offset.zero & overlay.size,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                items: [
+                                  PopupMenuItem(
+                                    child: const Text(
+                                      "Logout",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF093275),
                                       ),
                                     ),
-                                  ),
-                                  Expanded(
-                                    child: GestureDetector(
-                                      onTap: () =>
-                                          setState(() => _selectedTab = 1),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 10,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: _selectedTab == 1
-                                              ? Colors.white
-                                              : Colors.transparent,
-                                          borderRadius: BorderRadius.circular(
-                                            26,
+                                    onTap: () {
+                                      Future.delayed(
+                                        Duration.zero,
+                                        () => Navigator.pushReplacement(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => const Login(),
                                           ),
                                         ),
-                                        child: Center(
-                                          child: Text(
-                                            'Pasien inap',
-                                            style: TextStyle(
-                                              color: _selectedTab == 1
-                                                  ? navy
-                                                  : Colors.white,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
+                                      );
+                                    },
                                   ),
                                 ],
+                              );
+                            },
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white24,
+                              ),
+                              child: const Icon(
+                                Icons.person,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      // Segmented control (tabs)
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() => _selectedTab = 0),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _selectedTab == 0
+                                        ? Colors.white
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(26),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      'Laporan',
+                                      style: TextStyle(
+                                        color: _selectedTab == 0
+                                            ? navy
+                                            : Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() => _selectedTab = 1),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _selectedTab == 1
+                                        ? Colors.white
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(26),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      'Pasien inap',
+                                      style: TextStyle(
+                                        color: _selectedTab == 1
+                                            ? navy
+                                            : Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 18),
-                      // Content: show based on active tab
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 18.0),
-                        child: _selectedTab == 0
-                            ? RiwayatLaporan(user: widget.user) 
-                            : PasienInapWidget(
-                                rooms: rooms,
-                                inpatients: inpatients,
-                                navy: navy,
-                                cardBlue: cardBlue,
-                                role: 'perawat',
-                                isCompact: isCompact,
-                              ),
-                      ),
-                      const SizedBox(height: 24),
                     ],
                   ),
                 ),
+
+                const SizedBox(height: 18),
+
+                // Content area: Expanded so it gets bounded height. Inside Expanded we place a scrollable.
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18.0),
+                    child: _selectedTab == 0
+                        ? SingleChildScrollView(
+                            child: RiwayatLaporan(user: widget.user),
+                          )
+                        : SingleChildScrollView(
+                            child: PasienInap(user: widget.user),
+                          ),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
               ],
             );
           },

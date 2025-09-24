@@ -1,23 +1,27 @@
-// lib/widgets/assessment_widget.dart
 import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
-class AssessmentWidget extends StatefulWidget {
+class UploadFileWidget extends StatefulWidget {
+  final String apiPath;
+  final String title;
   final Future<void> Function(PlatformFile file)? onSave;
 
-  const AssessmentWidget({super.key, this.onSave});
+  const UploadFileWidget({
+    super.key,
+    required this.apiPath,
+    required this.title,
+    this.onSave,
+  });
 
   @override
-  State<AssessmentWidget> createState() => _AssessmentWidgetState();
+  State<UploadFileWidget> createState() => _UploadFileWidgetState();
 }
 
-class _AssessmentWidgetState extends State<AssessmentWidget> {
+class _UploadFileWidgetState extends State<UploadFileWidget> {
   PlatformFile? _pickedFile;
   bool _isSaving = false;
 
@@ -27,7 +31,7 @@ class _AssessmentWidgetState extends State<AssessmentWidget> {
     try {
       final result = await FilePicker.platform.pickFiles(
         allowMultiple: false,
-        withData: false, // gunakan path
+        withData: false, // pakai path
         type: FileType.custom,
         allowedExtensions: ['pdf'],
       );
@@ -47,7 +51,7 @@ class _AssessmentWidgetState extends State<AssessmentWidget> {
       if (widget.onSave != null) {
         await widget.onSave!(_pickedFile!);
       } else {
-        await _uploadFileToServer(_pickedFile!);
+        await _uploadFileToServer(_pickedFile!, widget.apiPath);
       }
 
       _showSnack('File berhasil disimpan');
@@ -64,7 +68,7 @@ class _AssessmentWidgetState extends State<AssessmentWidget> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  Future<void> _uploadFileToServer(PlatformFile file) async {
+  Future<void> _uploadFileToServer(PlatformFile file, String apiPath) async {
     const storage = FlutterSecureStorage();
     final token = await storage.read(key: 'access_token');
     if (token == null) throw Exception('No access token found. Silakan login ulang.');
@@ -73,8 +77,10 @@ class _AssessmentWidgetState extends State<AssessmentWidget> {
     if (apiBase.isEmpty) throw Exception('API_URL belum diset di .env');
     if (file.path == null) throw Exception('File path tidak tersedia.');
 
-    final uri = Uri.parse('$apiBase/pdf/process-assesmen');
-    print('[AssessmentWidget] Upload ke: $uri');
+    // pastikan apiPath dimulai dengan '/'
+    final normalizedPath = apiPath.startsWith('/') ? apiPath : '/$apiPath';
+    final uri = Uri.parse('$apiBase$normalizedPath');
+    debugPrint('[UploadFileWidget] Upload ke: $uri');
 
     final request = http.MultipartRequest('POST', uri);
     request.headers['Authorization'] = 'Bearer $token';
@@ -89,8 +95,8 @@ class _AssessmentWidgetState extends State<AssessmentWidget> {
     final streamed = await request.send();
     final response = await http.Response.fromStream(streamed);
 
-    print('[AssessmentWidget] Response status: ${response.statusCode}');
-    print('[AssessmentWidget] Response body: ${response.body}');
+    debugPrint('[UploadFileWidget] Response status: ${response.statusCode}');
+    debugPrint('[UploadFileWidget] Response body: ${response.body}');
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       String msg = 'Status ${response.statusCode}';
@@ -151,7 +157,7 @@ class _AssessmentWidgetState extends State<AssessmentWidget> {
               ),
             ),
             const SizedBox(height: 12),
-            Text('Upload Assessment', style: TextStyle(color: _navy, fontWeight: FontWeight.w700, fontSize: 16)),
+            Text(widget.title, style: TextStyle(color: _navy, fontWeight: FontWeight.w700, fontSize: 16)),
             const SizedBox(height: 12),
             if (hasFile)
               Padding(
@@ -186,6 +192,32 @@ class _AssessmentWidgetState extends State<AssessmentWidget> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Wrapper khusus untuk endpoint /pdf/process-permenkes
+class PermenkesFileWidget extends StatelessWidget {
+  const PermenkesFileWidget({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const UploadFileWidget(
+      apiPath: '/pdf/process-permenkes',
+      title: 'Upload Permenkes',
+    );
+  }
+}
+
+/// Wrapper khusus untuk endpoint /pdf/process-siki-slki-sdki
+class SikiSlkiSdkiFileWidget extends StatelessWidget {
+  const SikiSlkiSdkiFileWidget({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const UploadFileWidget(
+      apiPath: '/pdf/process-siki-slki-sdki',
+      title: 'Upload SIKI/SKLI/SDKI',
     );
   }
 }
