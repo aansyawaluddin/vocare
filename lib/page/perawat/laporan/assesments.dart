@@ -653,11 +653,15 @@ class _VocareReport2State extends State<VocareReport2> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) =>
-                  VocareReport3(cpptId: 0, token: widget.token,
-                  patientId: patientId,     // <-- TAMBAHKAN (ambil dari variabel patientId di fungsi ini)
-            perawatId: perawatId,     // <-- TAMBAHKAN (ambil dari variabel perawatId di fungsi ini)
-            query: widget.reportText,),
+              builder: (context) => VocareReport3(
+                cpptId: 0,
+                token: widget.token,
+                patientId:
+                    patientId, // <-- TAMBAHKAN (ambil dari variabel patientId di fungsi ini)
+                perawatId:
+                    perawatId, // <-- TAMBAHKAN (ambil dari variabel perawatId di fungsi ini)
+                query: widget.reportText,
+              ),
             ),
           );
         }

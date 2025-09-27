@@ -30,17 +30,51 @@ class _VocareReport3State extends State<VocareReport3> {
   static const cardBorder = Color(0xFFCED7E8);
   static const headingBlue = Color(0xFF0F4C81);
   static const buttonSave = Color(0xFF009563);
+  // MODIFICATION: Added a color for the update button
+  static const buttonUpdate = Color(0xFF0F4C81);
 
   Map<String, dynamic>? _cpptData;
   bool _isLoading = false;
-  bool _isLoadingCppt = false;
+  // bool _isLoadingCppt = false; // This variable was unused, removed for clarity.
   bool _isPostingLaporan = false;
   String? _error;
+
+  // MODIFICATION: Added loading state for the update process
+  bool _isUpdatingCppt = false;
+
+  // MODIFICATION: Added TextEditingControllers for editable fields
+  late final TextEditingController _subjectiveController;
+  late final TextEditingController _objectiveController;
+  late final TextEditingController _assessmentController;
+  late final TextEditingController _planController;
+  late final TextEditingController _keteranganController;
+  late final TextEditingController _dokterController;
 
   @override
   void initState() {
     super.initState();
+
+    // MODIFICATION: Initialize controllers
+    _subjectiveController = TextEditingController();
+    _objectiveController = TextEditingController();
+    _assessmentController = TextEditingController();
+    _planController = TextEditingController();
+    _keteranganController = TextEditingController();
+    _dokterController = TextEditingController();
+
     if (widget.cpptId > 0) _fetchCppt();
+  }
+
+  // MODIFICATION: Dispose controllers to prevent memory leaks
+  @override
+  void dispose() {
+    _subjectiveController.dispose();
+    _objectiveController.dispose();
+    _assessmentController.dispose();
+    _planController.dispose();
+    _keteranganController.dispose();
+    _dokterController.dispose();
+    super.dispose();
   }
 
   String _baseUrlFromEnv() {
@@ -75,7 +109,6 @@ class _VocareReport3State extends State<VocareReport3> {
 
       if (resp.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(resp.body);
-        // the API may wrap in {"data": {...}} or return the object directly
         Map<String, dynamic> obj = {};
         if (data.containsKey('data') && data['data'] is Map) {
           obj = Map<String, dynamic>.from(data['data']);
@@ -84,6 +117,13 @@ class _VocareReport3State extends State<VocareReport3> {
         }
         setState(() {
           _cpptData = obj;
+          // MODIFICATION: Populate controllers with fetched data
+          _subjectiveController.text = obj['subjective']?.toString() ?? '';
+          _objectiveController.text = obj['objective']?.toString() ?? '';
+          _assessmentController.text = obj['assessment']?.toString() ?? '';
+          _planController.text = obj['plan']?.toString() ?? '';
+          _keteranganController.text = obj['keterangan']?.toString() ?? '';
+          _dokterController.text = obj['dokter']?.toString() ?? '';
         });
       } else {
         String msg = resp.body;
@@ -107,9 +147,70 @@ class _VocareReport3State extends State<VocareReport3> {
     }
   }
 
-  Future<void> _postLaporan() async {
-    setState(() => _isPostingLaporan = true);
+  // MODIFICATION: New function to update the CPPT data via PUT request
+  Future<void> _updateCppt() async {
+    setState(() => _isUpdatingCppt = true);
 
+    final url = '${_baseUrlFromEnv()}/cppt/${widget.cpptId}';
+    final headers = _buildHeaders();
+    final body = jsonEncode({
+      'subjective': _subjectiveController.text,
+      'objective': _objectiveController.text,
+      'assessment': _assessmentController.text,
+      'plan': _planController.text,
+      'keterangan': _keteranganController.text,
+      'dokter': _dokterController.text,
+      // You may need to include other IDs if the API requires them
+      "patient_id": widget.patientId,
+      "perawat_id": widget.perawatId,
+    });
+
+    try {
+      if (kDebugMode) debugPrint('PUT $url -> $body');
+      final response = await http.put(
+        Uri.parse(url),
+        headers: headers,
+        body: body,
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('CPPT berhasil diperbarui!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // Optionally, refetch data to confirm changes
+        // _fetchCppt();
+      } else {
+        String msg = response.body;
+        try {
+          final parsed = jsonDecode(response.body);
+          if (parsed is Map && parsed['message'] != null)
+            msg = parsed['message'].toString();
+        } catch (_) {}
+        throw Exception(
+          'Gagal memperbarui CPPT (${response.statusCode}): $msg',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUpdatingCppt = false);
+      }
+    }
+  }
+
+  Future<void> _postLaporan() async {
+    // This function remains unchanged
+    setState(() => _isPostingLaporan = true);
     final url = '${_baseUrlFromEnv()}/laporan/';
     final headers = _buildHeaders();
     final body = jsonEncode({
@@ -118,7 +219,6 @@ class _VocareReport3State extends State<VocareReport3> {
       "perawat_id": widget.perawatId,
       "query": widget.query,
     });
-
     try {
       if (kDebugMode) debugPrint('POST $url -> $body');
       final response = await http.post(
@@ -126,13 +226,9 @@ class _VocareReport3State extends State<VocareReport3> {
         headers: headers,
         body: body,
       );
-
       if (!mounted) return;
-
       if (response.statusCode == 200 || response.statusCode == 201) {
         final Map<String, dynamic> data = jsonDecode(response.body);
-
-        // Ekstrak ID Laporan dari response
         int? laporanId;
         if (data.containsKey('id')) {
           laporanId = int.tryParse(data['id'].toString());
@@ -141,12 +237,9 @@ class _VocareReport3State extends State<VocareReport3> {
             data['data']['id'] != null) {
           laporanId = int.tryParse(data['data']['id'].toString());
         }
-
         if (laporanId == null) {
           throw Exception('Gagal mendapatkan ID Laporan dari response server.');
         }
-
-        // Navigasi ke halaman Laporan dengan ID baru
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -204,9 +297,8 @@ class _VocareReport3State extends State<VocareReport3> {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 10), // Increased spacing
           child,
-          const SizedBox(height: 12),
         ],
       ),
     );
@@ -255,8 +347,6 @@ class _VocareReport3State extends State<VocareReport3> {
             child: Image.network(sig, fit: BoxFit.contain),
           );
         }
-
-        // remove data:*;base64, header if present
         final idx = sig.indexOf('base64,');
         String payload = sig;
         if (idx >= 0) payload = sig.substring(idx + 7);
@@ -268,6 +358,32 @@ class _VocareReport3State extends State<VocareReport3> {
       } catch (e) {
         return const SizedBox.shrink();
       }
+    }
+
+    // MODIFICATION: Helper widget for creating editable text fields
+    Widget buildEditableField(TextEditingController controller) {
+      return TextFormField(
+        controller: controller,
+        maxLines: null, // Allows multiline input
+        keyboardType: TextInputType.multiline,
+        style: const TextStyle(height: 1.4, fontSize: 16),
+        decoration: InputDecoration(
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: cardBorder),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: cardBorder),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: headingBlue, width: 2),
+          ),
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        ),
+      );
     }
 
     return Padding(
@@ -284,57 +400,20 @@ class _VocareReport3State extends State<VocareReport3> {
               color: Color(0XFF093275),
             ),
           ),
-          const SizedBox(height: 5),
-          section(
-            'Subjective',
-            child: Text(
-              d['subjective']?.toString() ?? '-',
-              style: const TextStyle(height: 1.4, fontSize: 16),
-            ),
-          ),
+          const SizedBox(height: 15), // Increased spacing
+          section('Subjective', child: buildEditableField(_subjectiveController)),
           const SizedBox(height: 10),
-          section(
-            'Objective',
-            child: Text(
-              d['objective']?.toString() ?? '-',
-              style: const TextStyle(height: 1.4, fontSize: 16),
-            ),
-          ),
+          section('Objective', child: buildEditableField(_objectiveController)),
           const SizedBox(height: 10),
-          section(
-            'Assessment',
-            child: Text(
-              d['assessment']?.toString() ?? '-',
-              style: const TextStyle(height: 1.4, fontSize: 16),
-            ),
-          ),
+          section('Assessment', child: buildEditableField(_assessmentController)),
           const SizedBox(height: 10),
-          section(
-            'Plan',
-            child: Text(
-              d['plan']?.toString() ?? '-',
-              style: const TextStyle(height: 1.4, fontSize: 16),
-            ),
-          ),
+          section('Plan', child: buildEditableField(_planController)),
           const SizedBox(height: 10),
-          section(
-            'Keterangan',
-            child: Text(
-              d['keterangan']?.toString() ?? '-',
-              style: const TextStyle(height: 1.4, fontSize: 16),
-            ),
-          ),
+          section('Keterangan', child: buildEditableField(_keteranganController)),
           const SizedBox(height: 10),
-          if ((d['dokter'] ?? '').toString().isNotEmpty)
-            section(
-              'Dokter',
-              child: Text(
-                d['dokter']?.toString() ?? '-',
-                style: const TextStyle(height: 1.4, fontSize: 16),
-              ),
-            ),
+          if ((d['dokter'] ?? '').toString().isNotEmpty || _dokterController.text.isNotEmpty)
+            section('Dokter', child: buildEditableField(_dokterController)),
           const SizedBox(height: 10),
-          // signature
           if ((d['signature'] ?? '').toString().isNotEmpty)
             section(
               'Tanda Tangan',
@@ -358,37 +437,84 @@ class _VocareReport3State extends State<VocareReport3> {
         ),
         backgroundColor: const Color(0xFFD7E2FD),
       ),
-     body: SafeArea(child: _buildBody()),
+      body: SafeArea(child: _buildBody()),
+      // MODIFICATION: Updated bottomNavigationBar to hold two buttons in a Row
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(20, 8, 20, 18),
         child: Padding(
           padding: const EdgeInsets.only(top: 6.0),
-          child: SizedBox(
-            height: 56,
-            child: ElevatedButton.icon(
-              onPressed: (_isLoadingCppt || _isPostingLaporan) ? null : _postLaporan,
-              icon: _isPostingLaporan
-                  ? Container(
-                      width: 24,
-                      height: 24,
-                      padding: const EdgeInsets.all(2.0),
-                      child: const CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 3,
-                      ),
-                    )
-                  : const Icon(Icons.send),
-              label: Text(
-                _isPostingLaporan ? 'Mengirim...' : 'Buat Laporan',
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+          child: Row(
+            children: [
+              // Save/Update Button
+              Expanded(
+                child: SizedBox(
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: (_isLoading || _isUpdatingCppt || _isPostingLaporan)
+                        ? null
+                        : _updateCppt,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: buttonUpdate,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    child: _isUpdatingCppt
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 3,
+                            ),
+                          )
+                        : const Text(
+                            'Simpan',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            ),
+                          ),
+                  ),
+                ),
               ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: buttonSave,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
+              const SizedBox(width: 12),
+              // Create Report Button
+              Expanded(
+                child: SizedBox(
+                  height: 56,
+                  child: ElevatedButton.icon(
+                    onPressed: (_isLoading || _isPostingLaporan || _isUpdatingCppt)
+                        ? null
+                        : _postLaporan,
+                    icon: _isPostingLaporan
+                        ? Container(
+                            width: 24,
+                            height: 24,
+                            padding: const EdgeInsets.all(2.0),
+                            child: const CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 3,
+                            ),
+                          )
+                        : const Icon(Icons.send),
+                    label: Text(
+                      _isPostingLaporan ? 'Mengirim...' : 'Buat Laporan',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 16),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: buttonSave,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),

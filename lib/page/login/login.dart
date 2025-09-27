@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -20,7 +19,6 @@ class Login extends StatefulWidget {
 
 Future<User> loginRequest(String username, String password) async {
   try {
-    // pastikan dotenv ter-load
     if (!dotenv.isInitialized) {
       await dotenv.load(fileName: '.env');
     }
@@ -57,10 +55,14 @@ Future<User> loginRequest(String username, String password) async {
       // ambil token dari beberapa struktur kemungkinan
       String? accessToken;
       if (responseData is Map) {
-        accessToken = (responseData['access_token'] ?? responseData['token'])?.toString();
-        // ada kemungkinan token ada di nested data
-        if ((accessToken == null || accessToken.isEmpty) && responseData['data'] is Map) {
-          accessToken = (responseData['data']['access_token'] ?? responseData['data']['token'])?.toString();
+        accessToken = (responseData['access_token'] ?? responseData['token'])
+            ?.toString();
+        if ((accessToken == null || accessToken.isEmpty) &&
+            responseData['data'] is Map) {
+          accessToken =
+              (responseData['data']['access_token'] ??
+                      responseData['data']['token'])
+                  ?.toString();
         }
       }
 
@@ -71,8 +73,11 @@ Future<User> loginRequest(String username, String password) async {
       // ambil object user dari berbagai struktur
       dynamic userJson;
       if (responseData is Map) {
-        userJson = responseData['user'] ??
-            (responseData['data'] is Map ? responseData['data']['user'] : null) ??
+        userJson =
+            responseData['user'] ??
+            (responseData['data'] is Map
+                ? responseData['data']['user']
+                : null) ??
             responseData;
       } else {
         userJson = responseData;
@@ -82,11 +87,32 @@ Future<User> loginRequest(String username, String password) async {
         throw Exception('Response tidak berisi informasi user');
       }
 
-      // pastikan mengembalikan User yang menyertakan token (dari accessToken variable)
+      // simpan user ke secure storage supaya bisa auto-login
+      try {
+        Map<String, dynamic> userMap;
+        if (userJson is Map<String, dynamic>) {
+          userMap = userJson;
+        } else if (userJson is Map) {
+          userMap = Map<String, dynamic>.from(userJson);
+        } else {
+          // jika bukan map, coba encode-decode untuk ambil strukturnya
+          userMap = Map<String, dynamic>.from(
+            json.decode(json.encode(userJson)),
+          );
+        }
+        await storage.write(key: 'user', value: json.encode(userMap));
+      } catch (e) {
+        // jika penyimpanan user gagal, tetap lanjut (token sudah tersimpan)
+        if (kDebugMode) debugPrint('Gagal menyimpan user ke storage: $e');
+      }
+
       if (userJson is Map<String, dynamic>) {
         return User.fromJson(userJson, token: accessToken);
       } else if (userJson is Map) {
-        return User.fromJson(Map<String, dynamic>.from(userJson), token: accessToken);
+        return User.fromJson(
+          Map<String, dynamic>.from(userJson),
+          token: accessToken,
+        );
       } else {
         throw Exception('Format user tidak valid');
       }
@@ -114,7 +140,9 @@ class _LoginState extends State<Login> {
   bool _isLoading = false;
 
   void _showSnack(String msg, {Color bg = Colors.red}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: bg));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: bg));
   }
 
   @override
@@ -143,9 +171,13 @@ class _LoginState extends State<Login> {
 
       // debug: cek token
       if (user.token.isNotEmpty) {
-        if (kDebugMode) debugPrint('Login sukses. Token (partial): ${user.token.substring(0, user.token.length > 12 ? 12 : user.token.length)}...');
+        if (kDebugMode)
+          debugPrint(
+            'Login sukses. Token (partial): ${user.token.substring(0, user.token.length > 12 ? 12 : user.token.length)}...',
+          );
       } else {
-        if (kDebugMode) debugPrint('Login sukses tetapi token kosong di objek User.');
+        if (kDebugMode)
+          debugPrint('Login sukses tetapi token kosong di objek User.');
       }
 
       // navigasi ke Home — pastikan Home menerima parameter user

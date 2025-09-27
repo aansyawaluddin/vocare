@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
-import 'package:vocare/page/perawat/inap/report.dart';
+import 'package:vocare/page/perawat/inap/laporan.dart';
 
 class CpptTambahan extends StatefulWidget {
   final int cpptId;
@@ -30,17 +30,44 @@ class _CpptTambahanState extends State<CpptTambahan> {
   static const cardBorder = Color(0xFFCED7E8);
   static const headingBlue = Color(0xFF0F4C81);
   static const buttonSave = Color(0xFF009563);
+  static const buttonUpdate = Color(0xFF007BFF); // ADDED: Color for update button
 
   Map<String, dynamic>? _cpptData;
   bool _isLoading = false;
-  bool _isLoadingCppt = false;
   bool _isPostingLaporan = false;
+  bool _isUpdating = false;
   String? _error;
+
+  // ADDED: Controllers for editable text fields
+  late final TextEditingController _subjectiveController;
+  late final TextEditingController _objectiveController;
+  late final TextEditingController _assessmentController;
+  late final TextEditingController _planController;
+  late final TextEditingController _keteranganController;
 
   @override
   void initState() {
     super.initState();
-    _fetchCppt();
+    // ADDED: Initialize controllers
+    _subjectiveController = TextEditingController();
+    _objectiveController = TextEditingController();
+    _assessmentController = TextEditingController();
+    _planController = TextEditingController();
+    _keteranganController = TextEditingController();
+
+    if (widget.cpptId != 0) {
+      _fetchCppt();
+    }
+  }
+
+  @override
+  void dispose() {
+    _subjectiveController.dispose();
+    _objectiveController.dispose();
+    _assessmentController.dispose();
+    _planController.dispose();
+    _keteranganController.dispose();
+    super.dispose();
   }
 
   String _baseUrlFromEnv() {
@@ -83,6 +110,12 @@ class _CpptTambahanState extends State<CpptTambahan> {
         }
         setState(() {
           _cpptData = obj;
+          // MODIFIED: Populate controllers with fetched data
+          _subjectiveController.text = _cpptData?['subjective']?.toString() ?? '';
+          _objectiveController.text = _cpptData?['objective']?.toString() ?? '';
+          _assessmentController.text = _cpptData?['assessment']?.toString() ?? '';
+          _planController.text = _cpptData?['plan']?.toString() ?? '';
+          _keteranganController.text = _cpptData?['keterangan']?.toString() ?? '';
         });
       } else {
         String msg = resp.body;
@@ -103,6 +136,59 @@ class _CpptTambahanState extends State<CpptTambahan> {
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  // ADDED: Function to handle PUT request for updating CPPT
+  Future<void> _updateCppt() async {
+    setState(() => _isUpdating = true);
+
+    final url = '${_baseUrlFromEnv()}/cppt/${widget.cpptId}';
+    final headers = _buildHeaders();
+    final body = jsonEncode({
+      'subjective': _subjectiveController.text,
+      'objective': _objectiveController.text,
+      'assessment': _assessmentController.text,
+      'plan': _planController.text,
+      'keterangan': _keteranganController.text,
+    });
+
+    try {
+      if (kDebugMode) debugPrint('PUT $url -> $body');
+      final response =
+          await http.put(Uri.parse(url), headers: headers, body: body);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('CPPT berhasil diperbarui!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        String msg = response.body;
+        try {
+          final parsed = jsonDecode(response.body);
+          if (parsed is Map && parsed['message'] != null) {
+            msg = parsed['message'].toString();
+          }
+        } catch (_) {}
+        throw Exception(
+          'Gagal memperbarui CPPT (${response.statusCode}): $msg',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUpdating = false);
+      }
     }
   }
 
@@ -203,23 +289,42 @@ class _CpptTambahanState extends State<CpptTambahan> {
           ),
           const SizedBox(height: 6),
           child,
-          const SizedBox(height: 12),
+          // const SizedBox(height: 12), // Adjusted padding inside text form field
         ],
       ),
     );
   }
 
+  // ADDED: Helper widget for creating editable text fields
+  Widget _buildEditableField(TextEditingController controller) {
+    return TextFormField(
+      controller: controller,
+      maxLines: null, // Allows for multiline input
+      keyboardType: TextInputType.multiline,
+      style: const TextStyle(height: 1.4, fontSize: 16),
+      decoration: const InputDecoration(
+        border: InputBorder.none,
+        isDense: true,
+        contentPadding: EdgeInsets.zero,
+      ),
+    );
+  }
+
+
   Widget _buildBody() {
-    if (widget.cpptId == 0 && _cpptData == null) {
+    if (widget.cpptId == 0) { // MODIFIED: Simplified check
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(20.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: const [
-              Icon(Icons.info_outline, size: 48),
+              Icon(Icons.info_outline, size: 48, color: Colors.grey),
               SizedBox(height: 12),
-              Text('CPPT dibuat, tetapi cppt_id tidak tersedia dari server.'),
+              Text(
+                'Tidak ada CPPT yang dipilih atau ID tidak valid.',
+                textAlign: TextAlign.center,
+              ),
             ],
           ),
         ),
@@ -280,46 +385,17 @@ class _CpptTambahanState extends State<CpptTambahan> {
               color: Color(0XFF093275),
             ),
           ),
-          const SizedBox(height: 5),
-          section(
-            'Subjective',
-            child: Text(
-              d['subjective']?.toString() ?? '-',
-              style: const TextStyle(height: 1.4, fontSize: 16),
-            ),
-          ),
+          const SizedBox(height: 15),
+          // MODIFIED: Replaced Text with _buildEditableField
+          section('Subjective', child: _buildEditableField(_subjectiveController)),
           const SizedBox(height: 10),
-          section(
-            'Objective',
-            child: Text(
-              d['objective']?.toString() ?? '-',
-              style: const TextStyle(height: 1.4, fontSize: 16),
-            ),
-          ),
+          section('Objective', child: _buildEditableField(_objectiveController)),
           const SizedBox(height: 10),
-          section(
-            'Assessment',
-            child: Text(
-              d['assessment']?.toString() ?? '-',
-              style: const TextStyle(height: 1.4, fontSize: 16),
-            ),
-          ),
+          section('Assessment', child: _buildEditableField(_assessmentController)),
           const SizedBox(height: 10),
-          section(
-            'Plan',
-            child: Text(
-              d['plan']?.toString() ?? '-',
-              style: const TextStyle(height: 1.4, fontSize: 16),
-            ),
-          ),
+          section('Plan', child: _buildEditableField(_planController)),
           const SizedBox(height: 10),
-          section(
-            'Keterangan',
-            child: Text(
-              d['keterangan']?.toString() ?? '-',
-              style: const TextStyle(height: 1.4, fontSize: 16),
-            ),
-          ),
+          section('Keterangan', child: _buildEditableField(_keteranganController)),
           const SizedBox(height: 10),
           if ((d['dokter'] ?? '').toString().isNotEmpty)
             section(
@@ -341,8 +417,54 @@ class _CpptTambahanState extends State<CpptTambahan> {
     );
   }
 
+  // ADDED: Helper for creating loading buttons
+  Widget _buildLoadingButton(
+      {required bool isLoading,
+      required VoidCallback? onPressed,
+      required String text,
+      required String loadingText,
+      required Color color}) {
+    return SizedBox(
+      height: 52,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 0,
+        ),
+        child: isLoading
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    padding: const EdgeInsets.all(2.0),
+                    child: const CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 3,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(loadingText)
+                ],
+              )
+            : Text(text,
+                style:
+                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Determine if any action is in progress
+    final bool isActionInProgress = _isLoading || _isPostingLaporan || _isUpdating;
+
     return Scaffold(
       backgroundColor: background,
       appBar: AppBar(
@@ -354,43 +476,33 @@ class _CpptTambahanState extends State<CpptTambahan> {
         backgroundColor: const Color(0xFFD7E2FD),
       ),
       body: SafeArea(child: _buildBody()),
+      // MODIFIED: Updated bottom navigation bar to include both buttons
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(20, 8, 20, 18),
         child: Padding(
           padding: const EdgeInsets.only(top: 6.0),
-          child: SizedBox(
-            height: 56,
-            child: ElevatedButton.icon(
-              onPressed: (_isLoadingCppt || _isPostingLaporan)
-                  ? null
-                  : _postLaporan,
-              icon: _isPostingLaporan
-                  ? Container(
-                      width: 24,
-                      height: 24,
-                      padding: const EdgeInsets.all(2.0),
-                      child: const CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 3,
-                      ),
-                    )
-                  : const Icon(Icons.send),
-              label: Text(
-                _isPostingLaporan ? 'Mengirim...' : 'Buat Laporan',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
+          child: Row(
+            children: [
+              Expanded(
+                child: _buildLoadingButton(
+                  isLoading: _isUpdating,
+                  onPressed: isActionInProgress ? null : _updateCppt,
+                  text: 'Simpan Perubahan',
+                  loadingText: 'Menyimpan...',
+                  color: buttonUpdate,
                 ),
               ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: buttonSave,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildLoadingButton(
+                  isLoading: _isPostingLaporan,
+                  onPressed: isActionInProgress ? null : _postLaporan,
+                  text: 'Buat Laporan',
+                  loadingText: 'Mengirim...',
+                  color: buttonSave,
                 ),
-                elevation: 0,
               ),
-            ),
+            ],
           ),
         ),
       ),

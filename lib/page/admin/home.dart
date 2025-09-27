@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:vocare/common/type.dart';
+import 'package:vocare/page/admin/inap.dart';
+import 'package:vocare/page/admin/jalan.dart';
 import 'package:vocare/page/login/login.dart';
 import 'package:vocare/widgets/admin/add_user.dart';
 import 'package:vocare/widgets/admin/pengguna.dart';
@@ -17,6 +20,55 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
   int _selectedTab = 0;
 
   Key _penggunaWidgetKey = UniqueKey();
+
+  Widget _buildContent(double width) {
+    final navy = const Color(0xFF082B54);
+    final cardBlue = const Color(0xFFDCE9FF);
+    final isCompact = width < 380;
+
+    switch (_selectedTab) {
+      case 0:
+        return Pengguna(
+          key: _penggunaWidgetKey,
+          navy: navy,
+          cardBlue: cardBlue,
+          isCompact: isCompact,
+        );
+
+      case 1:
+        return SingleChildScrollView(
+          child: Column(
+            children: const [
+              SizedBox(height: 8),
+              UploadFileWidget(
+                apiPath: '/pdf/process-assesmen',
+                title: 'Upload Assessment',
+              ),
+              SizedBox(height: 12),
+              UploadFileWidget(
+                apiPath: '/pdf/process-permenkes',
+                title: 'Upload Permenkes',
+              ),
+              SizedBox(height: 12),
+              UploadFileWidget(
+                apiPath: '/pdf/process-siki-slki-sdki',
+                title: 'Upload SIKI/SKLI/SDKI',
+              ),
+              SizedBox(height: 16),
+            ],
+          ),
+        );
+
+      case 2:
+        return PasienInapAdmin(user: widget.user);
+
+      case 3:
+        return PasienJalanAdmin(user: widget.user);
+
+      default:
+        return const SizedBox.shrink();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -111,15 +163,25 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                                   ),
                                 ),
                                 onTap: () {
-                                  Future.delayed(
-                                    Duration.zero,
-                                    () => Navigator.pushReplacement(
+                                  // jalankan setelah menu menutup
+                                  Future.microtask(() async {
+                                    try {
+                                      final storage =
+                                          const FlutterSecureStorage();
+                                      await storage.delete(key: 'access_token');
+                                      await storage.delete(key: 'user');
+                                    } catch (e) {
+                                      // optional: handle error, mis. debug print
+                                    }
+                                    // navigasi dan bersihkan back stack supaya user tidak bisa kembali
+                                    Navigator.pushAndRemoveUntil(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (context) => const Login(),
+                                        builder: (_) => const Login(),
                                       ),
-                                    ),
-                                  );
+                                      (route) => false,
+                                    );
+                                  });
                                 },
                               ),
                             ],
@@ -196,6 +258,58 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                             ),
                           ),
                         ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => _selectedTab = 2),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              decoration: BoxDecoration(
+                                // PERBAIKAN: cek untuk tab ke-2 (index 2), bukan 1
+                                color: _selectedTab == 2
+                                    ? Colors.white
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(26),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'Pasien Inap',
+                                  style: TextStyle(
+                                    color: _selectedTab == 2
+                                        ? navy
+                                        : Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => _selectedTab = 3),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              decoration: BoxDecoration(
+                                // PERBAIKAN: cek untuk tab ke-2 (index 2), bukan 1
+                                color: _selectedTab == 3
+                                    ? Colors.white
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(26),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'Pasien Jalan',
+                                  style: TextStyle(
+                                    color: _selectedTab == 3
+                                        ? navy
+                                        : Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -205,35 +319,7 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
 
             final content = Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18.0),
-              child: _selectedTab == 0
-                  ? Pengguna(
-                      key: _penggunaWidgetKey,
-                      navy: navy,
-                      cardBlue: cardBlue,
-                      isCompact: isCompact,
-                    )
-                  : SingleChildScrollView(
-                      child: Column(
-                        children: const [
-                          SizedBox(height: 8),
-                          UploadFileWidget(
-                            apiPath: '/pdf/process-assesmen',
-                            title: 'Upload Assessment',
-                          ),
-                          SizedBox(height: 12),
-                          UploadFileWidget(
-                            apiPath: '/pdf/process-permenkes',
-                            title: 'Upload Permenkes',
-                          ),
-                          SizedBox(height: 12),
-                          UploadFileWidget(
-                            apiPath: '/pdf/process-siki-slki-sdki',
-                            title: 'Upload SIKI/SKLI/SDKI',
-                          ),
-                          SizedBox(height: 16),
-                        ],
-                      ),
-                    ),
+              child: _buildContent(width),
             );
 
             return Column(

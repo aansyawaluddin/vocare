@@ -6,6 +6,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart'; // ✨ NEW
 import 'package:http/http.dart' as http; // ✨ NEW
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // ✨ NEW
 import 'package:vocare/common/type.dart';
 import 'package:vocare/page/perawat/laporan/review.dart';
 
@@ -13,6 +14,11 @@ enum VoiceState { initial, listening, processing }
 
 // ✨ NEW: Add a state for data fetching
 enum DataState { loading, loaded, error }
+
+// Top-level cache constants
+const String _kCacheKey = 'vocare_questions_cache_v1';
+const String _kCacheTsKey = 'vocare_questions_cache_ts_v1';
+const Duration _kCacheTTL = Duration(hours: 24); // TTL: bisa diubah sesuai kebutuhan
 
 class VoicePageLaporan extends StatefulWidget {
   const VoicePageLaporan({super.key, required this.user});
@@ -45,15 +51,40 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
   DateTime? _lastAutoRestart;
   static const Duration _autoRestartCooldown = Duration(milliseconds: 400);
 
-  // ✨ NEW: State variables for questions and data fetching
   DataState _dataState = DataState.loading;
   String? _errorMessage;
   List<String> _pasienQuestions = [];
   List<String> _perawatQuestions = [];
 
-  // ♻️ MODIFIED: This now controls which set of *fetched* questions to show.
-  // 'pasien' corresponds to the old 'questions1', 'perawat' to 'questions2'.
-  String _activeQuestionSet = 'pasien'; 
+  String _activeQuestionSet = 'pasien';
+
+  // ✨ NEW: Define the initial hardcoded questions
+  final List<String> _initialQuestions = const [
+    "Siapa nama lengkap pasien?",
+    "Berapa nomor rekam medis pasien?",
+    "Apa jenis kelamin pasien?",
+    "Kapan tanggal lahir pasien?",
+    "Apa status perkawinan pasien?",
+    "Apa alamat pasien?",
+    "Apa pekerjaan pasien?",
+    "Siapa nama penanggung jawab pasien?",
+    "Apa hubungan penanggung jawab dengan pasien?",
+    "Bagaimana kontak penanggung jawab yang bisa dihubungi?",
+    "Tanggal berapa pasien melakukan kunjungan?",
+    "Jam berapa pasien tiba di rumah sakit?",
+    "Bagaimana cara masuk pasien ke rumah sakit (berjalan kaki/kursi roda/brankar)?",
+    "Pasien masuk ke poliklinik mana?",
+    "Apakah pasien datang dengan rujukan?",
+    "Siapa pendamping pasien saat datang?",
+    "Kelas pelayanan apa yang digunakan pasien?",
+    "Apa sumber data anamnesa yang digunakan?",
+  ];
+
+  // ✨ NEW: showInitialQuestions controls whether the initial list is shown
+  bool _showInitialQuestions = true;
+
+  // ✨ NEW: Flag to allow a short grace period after stop so final result arrives
+  bool _awaitingFinalization = false;
 
   void safeSetState(VoidCallback fn) {
     if (!mounted) return;
@@ -70,11 +101,97 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initSpeech();
-      _fetchQuestions(); // ✨ NEW: Fetch questions when widget is ready
+      _fetchQuestions();
     });
   }
 
-  // ✨ NEW: Function to fetch questions from the API
+  // -------------------------
+  // SharedPreferences cache helpers
+  // -------------------------
+  Future<Map<String, dynamic>?> _loadCachedQuestions() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final s = sp.getString(_kCacheKey);
+      if (s == null) return null;
+      final decoded = json.decode(s);
+      if (decoded is Map<String, dynamic>) return decoded;
+    } catch (e) {
+      debugPrint('Load cache error: $e');
+    }
+    return null;
+  }
+
+  Future<int> _getCacheTimestamp() async {
+    final sp = await SharedPreferences.getInstance();
+    return sp.getInt(_kCacheTsKey) ?? 0;
+  }
+
+  Future<void> _saveCachedQuestions(Map<String, dynamic> data) async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      await sp.setString(_kCacheKey, json.encode(data));
+      await sp.setInt(_kCacheTsKey, DateTime.now().millisecondsSinceEpoch);
+    } catch (e) {
+      debugPrint('Save cache error: $e');
+    }
+  }
+
+  Future<void> _clearQuestionsCache() async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.remove(_kCacheKey);
+    await sp.remove(_kCacheTsKey);
+  }
+
+  // -------------------------
+  // Network refresh (background-capable)
+  // -------------------------
+  Future<void> _refreshQuestionsFromNetwork({bool showErrors = false}) async {
+    try {
+      final apiUrl = dotenv.env['API_URL'];
+      if (apiUrl == null) {
+        if (showErrors) throw Exception('API_URL not found in .env file');
+        return;
+      }
+      final response = await http.get(Uri.parse('$apiUrl/assesments/questions'));
+      if (response.statusCode == 200) {
+        final decodedData = json.decode(response.body);
+        final data = decodedData['data'] as Map<String, dynamic>? ?? {};
+
+        // simpan cache
+        await _saveCachedQuestions(data);
+
+        // update UI hanya bila ada perbedaan atau saat awal belum ada data
+        final List<String> pQuestions = List<String>.from(
+          (data['pasien']?[0]?['list_pertanyaan']) ?? [],
+        );
+        final List<String> nQuestions = List<String>.from(
+          (data['perawat']?[0]?['list_pertanyaan']) ?? [],
+        );
+
+        if (!mounted) return;
+        safeSetState(() {
+          _pasienQuestions = pQuestions;
+          _perawatQuestions = nQuestions;
+          _dataState = DataState.loaded;
+        });
+      } else {
+        if (showErrors) {
+          throw Exception(
+              'Failed to load questions. Status code: ${response.statusCode}');
+        }
+      }
+    } catch (e) {
+      debugPrint('Error refreshing questions from network: $e');
+      if (showErrors && mounted) {
+        safeSetState(() {
+          _errorMessage = e.toString();
+          _dataState = DataState.error;
+        });
+      }
+    }
+  }
+
+  // --- Ganti _fetchQuestions dengan versi cache-aware ---
   Future<void> _fetchQuestions() async {
     safeSetState(() {
       _dataState = DataState.loading;
@@ -82,22 +199,58 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     });
 
     try {
-      final apiUrl = dotenv.env['API_URL'];
-      if (apiUrl == null) {
-        throw Exception('API_URL not found in .env file');
+      // 1) Coba load cache
+      final cached = await _loadCachedQuestions();
+      final ts = await _getCacheTimestamp();
+      final cacheAge =
+          DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(ts));
+
+      if (cached != null) {
+        // Terdapat cache — tampilkan segera
+        final List<String> pQuestions = List<String>.from(
+          (cached['pasien']?[0]?['list_pertanyaan']) ?? [],
+        );
+        final List<String> nQuestions = List<String>.from(
+          (cached['perawat']?[0]?['list_pertanyaan']) ?? [],
+        );
+
+        safeSetState(() {
+          _pasienQuestions = pQuestions;
+          _perawatQuestions = nQuestions;
+          _dataState = DataState.loaded;
+        });
+
+        // Jika cache masih fresh: jalankan refresh di background tapi jangan ganggu UI
+        if (cacheAge < _kCacheTTL) {
+          // background refresh (tidak menampilkan error ke user)
+          _refreshQuestionsFromNetwork();
+          return;
+        } else {
+          // cache expired — tampilkan cache terlebih dulu, lalu refresh di background
+          _refreshQuestionsFromNetwork();
+          return;
+        }
       }
+
+      // 2) Tidak ada cache — ambil dari network (tunggu sampai selesai)
+      final apiUrl = dotenv.env['API_URL'];
+      if (apiUrl == null) throw Exception('API_URL not found in .env file');
 
       final response = await http.get(Uri.parse('$apiUrl/assesments/questions'));
 
       if (response.statusCode == 200) {
         final decodedData = json.decode(response.body);
-        final data = decodedData['data'];
+        final data = decodedData['data'] as Map<String, dynamic>? ?? {};
 
-        // Safely extract lists of questions
         final List<String> pQuestions = List<String>.from(
-            data['pasien'][0]['list_pertanyaan'] ?? []);
+          (data['pasien']?[0]?['list_pertanyaan']) ?? [],
+        );
         final List<String> nQuestions = List<String>.from(
-            data['perawat'][0]['list_pertanyaan'] ?? []);
+          (data['perawat']?[0]?['list_pertanyaan']) ?? [],
+        );
+
+        // simpan cache
+        await _saveCachedQuestions(data);
 
         safeSetState(() {
           _pasienQuestions = pQuestions;
@@ -109,16 +262,24 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
             'Failed to load questions. Status code: ${response.statusCode}');
       }
     } catch (e) {
-      safeSetState(() {
-        _errorMessage = e.toString();
-        _dataState = DataState.error;
-      });
       debugPrint('Error fetching questions: $e');
+      // Jika ada cache sebelumnya, biarkan tetap tampil; kalau gak ada, tampilkan error
+      if (!mounted) return;
+      final cached = await _loadCachedQuestions();
+      if (cached != null) {
+        // sudah ditampilkan lebih dulu; cukup log saja
+        safeSetState(() {
+          _errorMessage = e.toString();
+          _dataState = DataState.loaded; // keep showing cached data
+        });
+      } else {
+        safeSetState(() {
+          _errorMessage = e.toString();
+          _dataState = DataState.error;
+        });
+      }
     }
   }
-  
-  // ... (dispose, _ensureMicrophonePermission, and other methods remain the same)
-  // ... (No changes from dispose() down to _navigateToReview(...))
 
   @override
   void dispose() {
@@ -242,10 +403,13 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                   _lastPartial = '';
                 }
                 debugPrint(
-                    'Auto-restart triggered by status ($status). Restarting quickly...');
+                  'Auto-restart triggered by status ($status). Restarting quickly...',
+                );
                 Future.delayed(const Duration(milliseconds: 150)).then((_) {
                   if (!mounted) return;
-                  if (_isSessionActive && _speechEnabled && !_reinitInProgress) {
+                  if (_isSessionActive &&
+                      _speechEnabled &&
+                      !_reinitInProgress) {
                     try {
                       _startListeningSession();
                     } catch (e) {
@@ -456,6 +620,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
       _isListening = true;
       _state = VoiceState.listening;
       _statusText = 'listening';
+      _awaitingFinalization = false; // reset
     });
 
     _lastPartial = '';
@@ -486,11 +651,14 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
             _fullBuffer = merged;
             _lastPartial = '';
             debugPrint(
-                'Final received and stitched into fullBuffer. length=${_fullBuffer.length}');
+              'Final received and stitched into fullBuffer. length=${_fullBuffer.length}',
+            );
           }
         },
         localeId: _chosenLocale,
+        // ✨ LONG durations to allow long dictation (keperluan pasien panjang)
         listenFor: const Duration(hours: 2),
+        // pauseFor determines how long silence is tolerated before auto-stop
         pauseFor: const Duration(minutes: 2),
         partialResults: true,
         cancelOnError: false,
@@ -547,6 +715,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
         _isListening = false;
         _state = VoiceState.processing;
         _statusText = 'processing';
+        _awaitingFinalization = true; // allow grace period for final result
       });
 
       try {
@@ -557,20 +726,30 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
         await _speech.stop();
       } catch (e) {
         debugPrint('Error saat stop(): $e');
+        // If stop fails, try cancel as fallback
+        try {
+          await _speech.cancel();
+        } catch (_) {}
       }
 
       _cancelRestartTimer();
-      await Future.delayed(const Duration(milliseconds: 300));
-      if (!mounted) return;
 
+      // ✨ NEW: Give a short grace period (up to 900ms) so the engine can deliver a final result
+      // In many cases the finalResult callback arrives a few hundred ms after stop().
+      await Future.delayed(const Duration(milliseconds: 700));
+
+      // capture all text available (fullBuffer + any last partial)
       final captured = (_fullBuffer + ' ' + _lastPartial).trim();
       final finalMerged = _mergeWithOverlap('', captured);
 
+      // reset buffers AFTER capture
       _fullBuffer = '';
       _lastPartial = '';
+      _awaitingFinalization = false;
 
-      final toShow =
-          finalMerged.isNotEmpty ? finalMerged : 'Tidak ada teks yang dikenali.';
+      final toShow = finalMerged.isNotEmpty
+          ? finalMerged
+          : 'Tidak ada teks yang dikenali.';
       if (!mounted) return;
       _navigateToReview(toShow);
 
@@ -586,11 +765,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
   void _navigateToReview(String reportText) {
     if (!mounted) return;
     try {
-      // ♻️ MODIFIED: Always set to perawat after first report, or handle as needed
-      safeSetState(() {
-        _activeQuestionSet = 'perawat';
-      });
-
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => VocareReport(
@@ -604,53 +778,33 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
       debugPrint('Navigate error: $e');
     }
   }
-  
-  // ♻️ MODIFIED: _buildQuestions now handles loading and error states
+
   Widget _buildQuestions() {
     Widget content;
-
     switch (_dataState) {
       case DataState.loading:
-        content = const Center(child: CircularProgressIndicator());
-        break;
-      case DataState.error:
-        content = Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'Gagal memuat pertanyaan:\n$_errorMessage',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.red),
-              ),
-              const SizedBox(height: 10),
-              ElevatedButton(
-                onPressed: _fetchQuestions,
-                child: const Text('Coba Lagi'),
-              ),
-            ],
-          ),
-        );
-        break;
-      case DataState.loaded:
-        final bool isShowingPerawat = _activeQuestionSet == 'perawat';
-        final questions = isShowingPerawat ? _perawatQuestions : _pasienQuestions;
-        final title = isShowingPerawat
-            ? 'Pertanyaan Untuk Perawat:'
-            : 'Pertanyaan Untuk Pasien:';
-
         content = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+            Row(
+              children: const [
+                Text(
+                  'Pertanyaan Awal:',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                ),
+                SizedBox(width: 8),
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
-                  children: questions.map((q) {
+                  children: _initialQuestions.map((q) {
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Row(
@@ -674,30 +828,192 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                 ),
               ),
             ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () {
-                    safeSetState(() {
-                      _activeQuestionSet =
-                          isShowingPerawat ? 'pasien' : 'perawat';
-                    });
-                  },
-                  child: Text(isShowingPerawat
-                      ? 'Lihat Pertanyaan Pasien'
-                      : 'Lihat Pertanyaan Perawat'),
-                ),
-              ],
-            ),
           ],
         );
+        break;
+
+      case DataState.error:
+        content = Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'Gagal memuat pertanyaan:\n$_errorMessage',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red),
+              ),
+              const SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: _fetchQuestions,
+                child: const Text('Coba Lagi'),
+              ),
+            ],
+          ),
+        );
+        break;
+
+      case DataState.loaded:
+        if (_showInitialQuestions) {
+          content = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Pertanyaan Awal:',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+              ),
+
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: _initialQuestions.map((q) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(top: 6),
+                              child: Icon(Icons.circle, size: 8),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                q,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildToggleButton(
+                      'Pertanyaan Pasien',
+                      active: _activeQuestionSet == 'pasien',
+                      isRight: false, // kiri = putih
+                      onPressed: () {
+                        safeSetState(() {
+                          _showInitialQuestions = false;
+                          _activeQuestionSet = 'pasien';
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildToggleButton(
+                      'Pertanyaan Perawat',
+                      active: _activeQuestionSet == 'perawat',
+                      isRight: true, // kanan = biru
+                      onPressed: () {
+                        safeSetState(() {
+                          _showInitialQuestions = false;
+                          _activeQuestionSet = 'perawat';
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        } else {
+          final bool isShowingPerawat = _activeQuestionSet == 'perawat';
+          final questions = isShowingPerawat ? _perawatQuestions : _pasienQuestions;
+          final title = isShowingPerawat
+              ? 'Pertanyaan Untuk Perawat:'
+              : 'Pertanyaan Untuk Pasien:';
+
+          content = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: questions.map((q) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(top: 6),
+                              child: Icon(Icons.circle, size: 8),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                q,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildToggleButton(
+                      'Pertanyaan Awal',
+                      active: _showInitialQuestions,
+                      isRight: false, 
+                      onPressed: () {
+                        safeSetState(() {
+                          _showInitialQuestions = true;
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildToggleButton(
+                      isShowingPerawat ? 'Pertanyaan Pasien' : 'Pertanyaan Perawat',
+                      active: isShowingPerawat
+                          ? _activeQuestionSet == 'pasien'
+                          : _activeQuestionSet == 'perawat',
+                      isRight: true, 
+                      onPressed: () {
+                        safeSetState(() {
+                          _activeQuestionSet = isShowingPerawat ? 'pasien' : 'perawat';
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        }
         break;
     }
 
     return SizedBox(
-      height: 360,
+      height: 400,
       child: Card(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -710,7 +1026,105 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     );
   }
 
-  // ... (No changes in _buildCenterContent or _buildBar)
+  ButtonStyle _commonButtonStyle({bool filled = true}) {
+    const radius = 8.0;
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(radius),
+    );
+
+    if (filled) {
+      return ElevatedButton.styleFrom(
+        shape: shape,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+        textStyle: const TextStyle(fontWeight: FontWeight.w600),
+        elevation: 2,
+      );
+    } else {
+      return OutlinedButton.styleFrom(
+        shape: shape,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+        textStyle: const TextStyle(fontWeight: FontWeight.w600),
+      );
+    }
+  }
+
+  Widget _buildPrimaryButton(String label, VoidCallback onPressed) {
+    return SizedBox(
+      height: 44,
+      child: ElevatedButton(
+        style: _commonButtonStyle(filled: true),
+        onPressed: onPressed,
+        child: Text(label),
+      ),
+    );
+  }
+
+  Widget _buildSecondaryButton(String label, VoidCallback onPressed) {
+    return SizedBox(
+      height: 44,
+      child: OutlinedButton(
+        style: _commonButtonStyle(filled: false),
+        onPressed: onPressed,
+        child: Text(label),
+      ),
+    );
+  }
+
+  Widget _buildTextButton(String label, VoidCallback onPressed) {
+    return SizedBox(
+      height: 44,
+      child: TextButton(
+        style: TextButton.styleFrom(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        onPressed: onPressed,
+        child: Text(label),
+      ),
+    );
+  }
+
+  Widget _buildToggleButton(
+    String label, {
+    required bool active,
+    required bool isRight,
+    required VoidCallback onPressed,
+  }) {
+    const radius = 8.0;
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(radius),
+    );
+    const primaryColor = Color(0xFF093275);
+
+
+    final background = isRight ? primaryColor : Colors.white;
+    final foreground = isRight ? Colors.white : primaryColor;
+    final side = isRight
+        ? null
+        : const BorderSide(color: primaryColor, width: 1.2);
+    final elevation = active
+        ? 2.0
+        : 0.0;
+
+    return SizedBox(
+      height: 44,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          shape: shape,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+          backgroundColor: background,
+          foregroundColor: foreground,
+          elevation: elevation,
+          side: side,
+          textStyle: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        child: Text(label),
+      ),
+    );
+  }
+
   Widget _buildCenterContent() {
     const blue = Color(0xFF093275);
     const double micSize = 110;
@@ -727,8 +1141,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
               child: Container(
                 width: micSize,
                 height: micSize,
-                decoration:
-                    BoxDecoration(color: blue, shape: BoxShape.circle),
+                decoration: BoxDecoration(color: blue, shape: BoxShape.circle),
                 child: Center(
                   child: Icon(Icons.mic, size: iconSize, color: Colors.white),
                 ),

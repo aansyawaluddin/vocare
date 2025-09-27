@@ -4,31 +4,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
-class VocareLaporan extends StatefulWidget {
+class LaporanTambahan extends StatefulWidget {
   final int laporanId;
   final String? token;
 
-  const VocareLaporan({super.key, required this.laporanId, this.token});
+  const LaporanTambahan({super.key, required this.laporanId, this.token});
 
   @override
-  State<VocareLaporan> createState() => _VocareLaporanState();
+  State<LaporanTambahan> createState() => _LaporanTambahanState();
 }
 
-class _VocareLaporanState extends State<VocareLaporan> {
+class _LaporanTambahanState extends State<LaporanTambahan> {
   static const background = Color.fromARGB(255, 223, 240, 255);
   static const cardBorder = Color(0xFFCED7E8);
   static const headingBlue = Color(0xFF0F4C81);
   static const titleColor = Color(0xFF093275);
   static const appBarBackground = Color(0xFFD7E2FD);
+  static const buttonUpdate = Color(0xFF007BFF); // ADDED
 
   Map<String, dynamic>? _laporanData;
   bool _isLoading = true;
+  bool _isUpdating = false; // ADDED: State for update process
   String? _error;
 
-  // MODIFICATION: Add a loading state for the update process
-  bool _isUpdatingLaporan = false;
-
-  // MODIFICATION: Add TextEditingControllers for each editable section
+  // ADDED: Controllers for editable fields
   late final TextEditingController _sdkiController;
   late final TextEditingController _slkiController;
   late final TextEditingController _sikiController;
@@ -37,16 +36,15 @@ class _VocareLaporanState extends State<VocareLaporan> {
   @override
   void initState() {
     super.initState();
-    // MODIFICATION: Initialize the controllers
+    // ADDED: Initialize controllers
     _sdkiController = TextEditingController();
     _slkiController = TextEditingController();
     _sikiController = TextEditingController();
     _tindakanLanjutanController = TextEditingController();
-
     _fetchLaporan();
   }
 
-  // MODIFICATION: Dispose controllers to prevent memory leaks
+  // ADDED: Dispose controllers to prevent memory leaks
   @override
   void dispose() {
     _sdkiController.dispose();
@@ -62,12 +60,12 @@ class _VocareLaporanState extends State<VocareLaporan> {
         'http://your-api-host';
   }
 
-  Map<String, String> _buildHeaders({bool isPutting = false}) {
-    // MODIFICATION: Added a flag to include Content-Type for PUT/POST
-    final headers = {
-      'Accept': 'application/json',
-      if (isPutting) 'Content-Type': 'application/json',
-    };
+  Map<String, String> _buildHeaders({bool isJsonContent = false}) {
+    // MODIFIED: Added isJsonContent parameter
+    final headers = {'Accept': 'application/json'};
+    if (isJsonContent) {
+      headers['Content-Type'] = 'application/json';
+    }
     if (widget.token != null && widget.token!.isNotEmpty) {
       headers['Authorization'] = 'Bearer ${widget.token}';
     }
@@ -91,13 +89,16 @@ class _VocareLaporanState extends State<VocareLaporan> {
         final data = body.containsKey('data') && body['data'] is Map
             ? body['data']
             : body;
+
         setState(() {
           _laporanData = data;
-          // MODIFICATION: Populate controllers with data from the API
-          _sdkiController.text = data['SDKI']?.toString() ?? '';
-          _slkiController.text = data['SLKI']?.toString() ?? '';
-          _sikiController.text = data['SIKI']?.toString() ?? '';
-          _tindakanLanjutanController.text = data['tindakan_lanjutan']?.toString() ?? '';
+          // ADDED: Populate controllers with data from API
+          _sdkiController.text = _formatContentToList(data['SDKI']?.toString());
+          _slkiController.text = _formatContentToList(data['SLKI']?.toString());
+          _sikiController.text = _formatContentToList(data['SIKI']?.toString());
+          _tindakanLanjutanController.text = _formatContentToList(
+            data['tindakan_lanjutan']?.toString(),
+          );
         });
       } else {
         throw Exception('Gagal memuat laporan: Status ${response.statusCode}');
@@ -107,28 +108,31 @@ class _VocareLaporanState extends State<VocareLaporan> {
         _error = e.toString();
       });
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  // MODIFICATION: New function to update the report via PUT request
+  // ADDED: Function to update the report via PUT request
   Future<void> _updateLaporan() async {
-    setState(() => _isUpdatingLaporan = true);
+    setState(() => _isUpdating = true);
 
     final url = '${_baseUrlFromEnv()}/laporan/${widget.laporanId}';
-    final headers = _buildHeaders(isPutting: true);
+    final headers = _buildHeaders(isJsonContent: true);
     final body = jsonEncode({
-      'SDKI': _sdkiController.text,
-      'SLKI': _slkiController.text,
-      'SIKI': _sikiController.text,
-      'tindakan_lanjutan': _tindakanLanjutanController.text,
+      'SDKI': _formatTextToApi(_sdkiController.text),
+      'SLKI': _formatTextToApi(_slkiController.text),
+      'SIKI': _formatTextToApi(_sikiController.text),
+      'tindakan_lanjutan': _formatTextToApi(_tindakanLanjutanController.text),
     });
 
     try {
       if (kDebugMode) debugPrint('PUT $url -> $body');
-      final response = await http.put(Uri.parse(url), headers: headers, body: body);
+      final response =
+          await http.put(Uri.parse(url), headers: headers, body: body);
 
       if (!mounted) return;
 
@@ -151,13 +155,12 @@ class _VocareLaporanState extends State<VocareLaporan> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isUpdatingLaporan = false);
+        setState(() => _isUpdating = false);
       }
     }
   }
 
-  /// This function is no longer used for rendering the main UI but is kept
-  /// in case it's needed for other display purposes.
+  /// Converts API string e.g., `{"Item 1","Item 2"}` to a numbered list.
   String _formatContentToList(String? content) {
     if (content == null || content.isEmpty || content == '{}') {
       return 'Tidak ada data';
@@ -174,7 +177,24 @@ class _VocareLaporanState extends State<VocareLaporan> {
     return formattedItems.join('\n');
   }
 
-  // MODIFICATION: _buildSection now takes a controller to be editable
+  /// ADDED: Converts a numbered list string back to the API format.
+  String _formatTextToApi(String text) {
+    if (text.trim().isEmpty || text.trim() == 'Tidak ada data') {
+      return '{}';
+    }
+    // Split by new line, remove numbering, trim, and filter out empty lines
+    final items = text
+        .split('\n')
+        .map((line) => line.replaceAll(RegExp(r'^\d+\.\s*'), '').trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+    // Enclose each item in quotes and join with a comma
+    final quotedItems = items.map((item) => '"$item"').join(',');
+    // Return in the {"item1","item2"} format
+    return '{$quotedItems}';
+  }
+
+  // MODIFIED: This widget now takes a controller for editable content.
   Widget _buildSection(String title, TextEditingController controller) {
     return Container(
       width: double.infinity,
@@ -202,29 +222,16 @@ class _VocareLaporanState extends State<VocareLaporan> {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 10),
-          // MODIFICATION: Replaced Text with TextFormField for editing
+          const SizedBox(height: 8),
           TextFormField(
             controller: controller,
-            maxLines: null, // Allows multiline input
+            maxLines: null,
             keyboardType: TextInputType.multiline,
             style: const TextStyle(height: 1.4, fontSize: 16),
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: cardBorder),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: cardBorder),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: headingBlue, width: 2),
-              ),
+            decoration: const InputDecoration(
+              border: InputBorder.none,
               isDense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: EdgeInsets.zero,
             ),
           ),
         ],
@@ -247,11 +254,11 @@ class _VocareLaporanState extends State<VocareLaporan> {
     if (_laporanData == null) {
       return const Center(child: Text('Tidak ada data laporan ditemukan.'));
     }
-    
-    // MODIFICATION: Calls to _buildSection now use controllers
+
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
+        // MODIFIED: Using controllers instead of raw data strings.
         _buildSection(
           'SDKI (Standar Diagnosis Keperawatan Indonesia)',
           _sdkiController,
@@ -264,16 +271,58 @@ class _VocareLaporanState extends State<VocareLaporan> {
           'SIKI (Standar Intervensi Keperawatan Indonesia)',
           _sikiController,
         ),
-        _buildSection(
-          'Tindakan Lanjutan',
-          _tindakanLanjutanController,
-        ),
+        _buildSection('Tindakan Lanjutan', _tindakanLanjutanController),
       ],
+    );
+  }
+  
+  // ADDED: Helper for creating loading buttons
+  Widget _buildLoadingButton(
+      {required bool isLoading,
+      required VoidCallback? onPressed,
+      required String text,
+      required String loadingText,
+      required Color color}) {
+    return SizedBox(
+      height: 52,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 0,
+        ),
+        child: isLoading
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    padding: const EdgeInsets.all(2.0),
+                    child: const CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 3,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(loadingText)
+                ],
+              )
+            : Text(text,
+                style:
+                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool isActionInProgress = _isLoading || _isUpdating;
+
     return Scaffold(
       backgroundColor: background,
       appBar: AppBar(
@@ -285,65 +334,40 @@ class _VocareLaporanState extends State<VocareLaporan> {
         backgroundColor: appBarBackground,
       ),
       body: SafeArea(child: _buildBody()),
-      // MODIFICATION: bottomNavigationBar now has a Row with two buttons
+      // MODIFIED: Added a Row with two buttons.
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(20, 8, 20, 18),
         child: Row(
           children: [
-            // Save Button
             Expanded(
-              child: SizedBox(
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: (_isLoading || _isUpdatingLaporan) ? null : _updateLaporan,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: headingBlue,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: _isUpdatingLaporan
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 3,
-                          ),
-                        )
-                      : const Text(
-                          'Simpan',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                        ),
-                ),
+              child: _buildLoadingButton(
+                isLoading: _isUpdating,
+                onPressed: isActionInProgress ? null : _updateLaporan,
+                text: 'Simpan Perubahan',
+                loadingText: 'Menyimpan...',
+                color: buttonUpdate,
               ),
             ),
             const SizedBox(width: 12),
-            // Done/Finish Button
             Expanded(
-              child: SizedBox(
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: (_isLoading || _isUpdatingLaporan)
-                      ? null
-                      : () {
-                          Navigator.of(context)
-                              .popUntil((route) => route.isFirst);
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: titleColor,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+              child: ElevatedButton(
+                onPressed: isActionInProgress
+                    ? null
+                    : () {
+                        Navigator.of(context)
+                            .popUntil((route) => route.isFirst);
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: titleColor,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 52),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Text(
-                    'Selesai',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                  ),
+                ),
+                child: const Text(
+                  'Selesai',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                 ),
               ),
             ),
