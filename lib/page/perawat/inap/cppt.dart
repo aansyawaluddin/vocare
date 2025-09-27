@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
-import 'package:vocare/page/perawat/laporan/laporan.dart';
+import 'package:vocare/page/perawat/inap/report.dart';
 
 class CpptTambahan extends StatefulWidget {
   final int cpptId;
@@ -148,7 +148,7 @@ class _CpptTambahanState extends State<CpptTambahan> {
           context,
           MaterialPageRoute(
             builder: (context) =>
-                VocareLaporan(laporanId: laporanId!, token: widget.token),
+                LaporanTambahan(laporanId: laporanId!, token: widget.token),
           ),
         );
       } else {

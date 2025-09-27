@@ -1,306 +1,222 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:vocare/page/perawat/laporan/assesments.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 
-class VocareReportInap extends StatefulWidget {
-  final String reportText;
-  const VocareReportInap({super.key, required this.reportText});
+class LaporanTambahan extends StatefulWidget {
+  final int laporanId;
+  final String? token;
+
+  const LaporanTambahan({super.key, required this.laporanId, this.token});
 
   @override
-  State<VocareReportInap> createState() => _VocareReportInapState();
+  State<LaporanTambahan> createState() => _LaporanTambahanState();
 }
 
-class _VocareReportInapState extends State<VocareReportInap> {
-  late TextEditingController _controller;
-  late String _currentText;
+class _LaporanTambahanState extends State<LaporanTambahan> {
+  static const background = Color.fromARGB(255, 223, 240, 255);
+  static const cardBorder = Color(0xFFCED7E8);
+  static const headingBlue = Color(0xFF0F4C81);
+  static const titleColor = Color(0xFF093275);
+  static const appBarBackground = Color(0xFFD7E2FD);
+
+  Map<String, dynamic>? _laporanData;
+  bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _currentText = widget.reportText;
-    _controller = TextEditingController(text: _currentText);
+    _fetchLaporan();
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  String _baseUrlFromEnv() {
+    return dotenv.env['API_BASE_URL'] ??
+        dotenv.env['API_URL'] ??
+        'http://your-api-host';
   }
 
-  void _showEditSheet() {
-    showModalBottomSheet(
-      backgroundColor: const Color(0xFFDFF0FF),
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+  Map<String, String> _buildHeaders() {
+    final headers = {'Accept': 'application/json'};
+    if (widget.token != null && widget.token!.isNotEmpty) {
+      headers['Authorization'] = 'Bearer ${widget.token}';
+    }
+    return headers;
+  }
+
+  Future<void> _fetchLaporan() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    final url = '${_baseUrlFromEnv()}/laporan/${widget.laporanId}';
+
+    try {
+      if (kDebugMode) debugPrint('GET $url');
+      final response = await http.get(Uri.parse(url), headers: _buildHeaders());
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> body = jsonDecode(response.body);
+        setState(() {
+          // Ambil data dari dalam key "data" jika ada
+          _laporanData = body.containsKey('data') && body['data'] is Map
+              ? body['data']
+              : body;
+        });
+      } else {
+        throw Exception('Gagal memuat laporan: Status ${response.statusCode}');
+      }
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  /// Membersihkan string dari API dan mengubahnya menjadi daftar bernomor.
+  String _formatContentToList(String? content) {
+    if (content == null || content.isEmpty || content == '{}') {
+      return 'Tidak ada data';
+    }
+
+    // 1. Hapus kurung kurawal di awal dan akhir
+    String cleaned = content.replaceAll(RegExp(r'^\{|\}$'), '');
+
+    // 2. Pisahkan setiap item berdasarkan koma
+    List<String> items = cleaned.split(',');
+
+    // 3. Bersihkan setiap item dari tanda kutip dan spasi, lalu beri nomor
+    List<String> formattedItems = [];
+    for (int i = 0; i < items.length; i++) {
+      String item = items[i]
+          .trim() // Hapus spasi
+          .replaceAll(RegExp(r'^"|"'), ''); // Hapus tanda kutip
+      if (item.isNotEmpty) {
+        formattedItems.add('${i + 1}. $item');
+      }
+    }
+
+    // 4. Gabungkan kembali dengan pemisah baris baru
+    return formattedItems.join('\n');
+  }
+
+  Widget _buildSection(String title, String? content) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: cardBorder),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-            left: 16,
-            right: 16,
-            top: 16,
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: headingBlue,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Edit Laporan',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                  color: Color(0xFF083B74),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _controller,
-                keyboardType: TextInputType.multiline,
-                maxLines: null,
-                minLines: 5,
-                decoration: InputDecoration(
-                  hintText: 'Masukkan teks laporan...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                      },
-                      child: const Text('Batal'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          _currentText = _controller.text;
-                        });
-                        Navigator.of(context).pop();
-                      },
-                      child: const Text('Simpan'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-            ],
+          const SizedBox(height: 8),
+          Text(
+            content ?? 'Tidak ada data',
+            style: const TextStyle(height: 1.4, fontSize: 16),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
-  // memecah teks transkrip menjadi blok-blok ringkasan.
-  // Kita anggap setiap paragraf kosong (double newline) sebagai pemisah item.
-  List<String> _buildActionItemsFromText(String t) {
-    final parts = t.split(RegExp(r'\n\s*\n')).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-    if (parts.isEmpty && t.trim().isNotEmpty) return [t.trim()];
-    if (parts.isEmpty) return ['Tidak ada tindakan.'];
-    return parts;
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Text(_error!, textAlign: TextAlign.center),
+        ),
+      );
+    }
+    if (_laporanData == null) {
+      return const Center(child: Text('Tidak ada data laporan ditemukan.'));
+    }
+
+    final data = _laporanData!;
+    // Kode BARU di dalam _buildBody()
+
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        _buildSection(
+          'SDKI (Standar Diagnosis Keperawatan Indonesia)',
+          _formatContentToList(data['SDKI']?.toString()), 
+        ),
+        _buildSection(
+          'SLKI (Standar Luaran Keperawatan Indonesia)',
+          _formatContentToList(data['SLKI']?.toString()), 
+        ),
+        _buildSection(
+          'SIKI (Standar Intervensi Keperawatan Indonesia)',
+          _formatContentToList(data['SIKI']?.toString()), 
+        ),
+        _buildSection(
+          'Tindakan Lanjutan',
+          _formatContentToList(
+            data['tindakan_lanjutan']?.toString(),
+          ), 
+        ),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    const background = Color(0xFFDFF0FF); // latar biru muda
-    const cardBorder = Color(0xFFCED7E8);
-    const headingBlue = Color(0xFF0F4C81);
-    const accentBox = Color(0xFFEAF2FF); // warna box kecil
-    const darkButtonBlue = Color(0xFF083B74);
-
-    final actions = _buildActionItemsFromText(_currentText);
-
     return Scaffold(
       backgroundColor: background,
       appBar: AppBar(
-        elevation: 0,
-        backgroundColor: background,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF093275)),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        centerTitle: true,
+        titleSpacing: 60,
         title: const Text(
-          'Nurse Report',
-          style: TextStyle(
-            color: Color(0xFF093275),
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-          ),
+          'Hasil Laporan',
+          style: TextStyle(fontSize: 20, color: titleColor),
         ),
+        backgroundColor: appBarBackground,
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
-          child: Column(
-            children: [
-              // Informasi Pasien card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: cardBorder),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.03),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Text(
-                        'Informasi Pasien',
-                        style: TextStyle(
-                          color: headingBlue,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text('Nama Pasien: Tn. Andi', style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 4),
-                    const Text('Nomor RM: 1234'),
-                    const SizedBox(height: 4),
-                    const Text('Tanggal/Waktu:'),
-                    const SizedBox(height: 2),
-                    const Text('25 Oktober 2024, 10:30', style: TextStyle(fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: cardBorder),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Ringkasan Tindakan',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: Column(
-                            children: actions.map((item) {
-                              return GestureDetector(
-                                onTap: _showEditSheet, 
-                                child: Container(
-                                  width: double.infinity,
-                                  margin: const EdgeInsets.only(bottom: 10),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: accentBox,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: cardBorder),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        item.split('\n').first.length > 40
-                                            ? item.split('\n').first.substring(0, 40) + '...'
-                                            : item.split('\n').first,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          color: headingBlue,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        item,
-                                        style: const TextStyle(height: 1.4),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 56,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                        },
-                        icon: const Icon(Icons.close, color: Colors.white),
-                        label: const Text('Batal', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red[800],
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 0,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: SizedBox(
-                      height: 56,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => VocareReport2(reportText: _currentText),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.save, color: Colors.white),
-                        label: const Text('Save', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green[700],
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 0,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+      body: SafeArea(child: _buildBody()),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(20, 8, 20, 18),
+        child: ElevatedButton(
+          onPressed: () {
+            Navigator.of(context).popUntil((route) => route.isFirst);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: titleColor,
+            foregroundColor: Colors.white,
+            minimumSize: const Size(double.infinity, 56),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          child: const Text(
+            'Selesai',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
           ),
         ),
       ),

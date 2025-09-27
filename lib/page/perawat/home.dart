@@ -222,18 +222,16 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
                 ),
 
                 const SizedBox(height: 18),
-
-                // Content area: Expanded so it gets bounded height. Inside Expanded we place a scrollable.
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 18.0),
                     child: _selectedTab == 0
-                        ? SingleChildScrollView(
-                            child: RiwayatLaporan(user: widget.user),
-                          )
-                        : SingleChildScrollView(
-                            child: PasienInap(user: widget.user),
-                          ),
+                        ? RiwayatLaporan(
+                            user: widget.user,
+                          ) // RiwayatLaporan harus punya scrolling sendiri (ListView)
+                        : PasienInap(
+                            user: widget.user,
+                          ), // PasienInap/di dalamnya pakai LayoutBuilder; jangan wrap di scroll luar
                   ),
                 ),
 
@@ -246,9 +244,7 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
       bottomNavigationBar: _selectedTab == 0
           ? SafeArea(
               minimum: const EdgeInsets.fromLTRB(24, 8, 24, 18),
-              child: Padding(
-                padding: const EdgeInsets.only(top: 6.0),
-                child: SizedBox(
+              child:  SizedBox(
                   height: 56,
                   child: ElevatedButton(
                     onPressed: () {
@@ -282,7 +278,7 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
                     ),
                   ),
                 ),
-              ),
+            
             )
           : null,
     );

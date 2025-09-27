@@ -186,13 +186,22 @@ class _PasienInapState extends State<PasienInap> {
       return const Center(child: Text('Belum ada data pasien rawat inap.'));
     }
 
-    return PasienInapWidget(
-      user: widget.user,
-      rooms: _rooms,
-      inpatients: _inpatientsForUI,
-      navy: navyColor,
-      cardBlue: cardBlueColor,
-      role: 'perawat',
+    // <-- Ganti menjadi LayoutBuilder + SizedBox supaya child mendapat height yang jelas
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SizedBox(
+          height: constraints.maxHeight,
+          width: constraints.maxWidth,
+          child: PasienInapWidget(
+            user: widget.user,
+            rooms: _rooms,
+            inpatients: _inpatientsForUI,
+            navy: navyColor,
+            cardBlue: cardBlueColor,
+            role: 'perawat',
+          ),
+        );
+      },
     );
   }
 }

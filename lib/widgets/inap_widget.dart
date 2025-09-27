@@ -15,7 +15,6 @@ class PasienInapWidget extends StatefulWidget {
   });
 
   final List<String> rooms;
-  // gunakan dynamic agar lebih fleksibel (id bisa int, dsb)
   final List<Map<String, dynamic>> inpatients;
   final Color navy;
   final Color cardBlue;
@@ -114,9 +113,8 @@ class _PasienInapWidgetState extends State<PasienInapWidget> {
             ),
           )
         else
-
-          SizedBox(
-            height: 500,
+          // Ganti SizedBox(height: 500) jadi Expanded agar mengambil sisa ruang Column
+          Expanded(
             child: ListView.builder(
               padding: EdgeInsets.zero,
               itemCount: visible.length,
@@ -183,7 +181,6 @@ class InpatientCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // perbaikan: compact harusnya lebih kecil
     final cardHeight = isCompact ? 100.0 : 120.0;
 
     return Row(

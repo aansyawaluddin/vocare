@@ -1,11 +1,18 @@
+import 'dart:async';
+import 'dart:convert'; // ✨ NEW: For decoding JSON
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // ✨ NEW
+import 'package:http/http.dart' as http; // ✨ NEW
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:vocare/common/type.dart';
 import 'package:vocare/page/perawat/laporan/review.dart';
 
 enum VoiceState { initial, listening, processing }
+
+// ✨ NEW: Add a state for data fetching
+enum DataState { loading, loaded, error }
 
 class VoicePageLaporan extends StatefulWidget {
   const VoicePageLaporan({super.key, required this.user});
@@ -23,8 +30,30 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
   String _statusText = '';
   VoiceState _state = VoiceState.initial;
   int _session = 0;
+  bool _navigatedForSession = false;
 
+  bool _isSessionActive = false;
   late final AnimationController _animController;
+  String _chosenLocale = 'id_ID';
+  String _lastPartial = '';
+  String _fullBuffer = '';
+  bool _autoRestartEnabled = true;
+  bool _reinitInProgress = false;
+  Timer? _restartTimer;
+  int _reinitAttempts = 0;
+  final bool _preferOnDevice = false;
+  DateTime? _lastAutoRestart;
+  static const Duration _autoRestartCooldown = Duration(milliseconds: 400);
+
+  // ✨ NEW: State variables for questions and data fetching
+  DataState _dataState = DataState.loading;
+  String? _errorMessage;
+  List<String> _pasienQuestions = [];
+  List<String> _perawatQuestions = [];
+
+  // ♻️ MODIFIED: This now controls which set of *fetched* questions to show.
+  // 'pasien' corresponds to the old 'questions1', 'perawat' to 'questions2'.
+  String _activeQuestionSet = 'pasien'; 
 
   void safeSetState(VoidCallback fn) {
     if (!mounted) return;
@@ -38,7 +67,70 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    _initSpeech();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initSpeech();
+      _fetchQuestions(); // ✨ NEW: Fetch questions when widget is ready
+    });
+  }
+
+  // ✨ NEW: Function to fetch questions from the API
+  Future<void> _fetchQuestions() async {
+    safeSetState(() {
+      _dataState = DataState.loading;
+      _errorMessage = null;
+    });
+
+    try {
+      final apiUrl = dotenv.env['API_URL'];
+      if (apiUrl == null) {
+        throw Exception('API_URL not found in .env file');
+      }
+
+      final response = await http.get(Uri.parse('$apiUrl/assesments/questions'));
+
+      if (response.statusCode == 200) {
+        final decodedData = json.decode(response.body);
+        final data = decodedData['data'];
+
+        // Safely extract lists of questions
+        final List<String> pQuestions = List<String>.from(
+            data['pasien'][0]['list_pertanyaan'] ?? []);
+        final List<String> nQuestions = List<String>.from(
+            data['perawat'][0]['list_pertanyaan'] ?? []);
+
+        safeSetState(() {
+          _pasienQuestions = pQuestions;
+          _perawatQuestions = nQuestions;
+          _dataState = DataState.loaded;
+        });
+      } else {
+        throw Exception(
+            'Failed to load questions. Status code: ${response.statusCode}');
+      }
+    } catch (e) {
+      safeSetState(() {
+        _errorMessage = e.toString();
+        _dataState = DataState.error;
+      });
+      debugPrint('Error fetching questions: $e');
+    }
+  }
+  
+  // ... (dispose, _ensureMicrophonePermission, and other methods remain the same)
+  // ... (No changes from dispose() down to _navigateToReview(...))
+
+  @override
+  void dispose() {
+    _cancelRestartTimer();
+    try {
+      _speech.cancel();
+    } catch (_) {}
+    try {
+      _speech.stop();
+    } catch (_) {}
+    _animController.dispose();
+    super.dispose();
   }
 
   Future<bool> _ensureMicrophonePermission() async {
@@ -102,43 +194,130 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
 
     try {
       bool available = await _speech.initialize(
-        onStatus: (status) {
+        onStatus: (status) async {
           debugPrint('Speech status callback: $status');
-          safeSetState(() {
-            _statusText = status;
-            if (status == 'listening') {
-              _isListening = true;
-              try {
-                _animController.repeat();
-              } catch (_) {}
-            } else if (status == 'notListening' ||
-                status == 'done' ||
-                status == 'stopped') {
-              _isListening = false;
-              try {
-                _animController.stop();
-              } catch (_) {}
-            }
-          });
-        },
-        onError: (error) {
-          debugPrint('Speech error callback: $error');
-          String msg = 'Unknown error';
-          try {
-          } catch (_) {
-            msg = error.toString();
-          }
+          final s = (status ?? '').toLowerCase();
 
           safeSetState(() {
+            _statusText = status ?? '';
+          });
+
+          if (s.contains('listening')) {
+            safeSetState(() {
+              _isListening = true;
+              _navigatedForSession = false;
+              _state = VoiceState.listening;
+            });
+            try {
+              _animController.repeat();
+            } catch (_) {}
+            return;
+          }
+
+          if (s.contains('notlistening') ||
+              s.contains('done') ||
+              s.contains('stopped')) {
+            final wasListening = _isListening;
+            safeSetState(() {
+              _isListening = false;
+            });
+            try {
+              _animController.stop();
+            } catch (_) {}
+
+            // 🔁 Auto-restart jika sesi logis masih aktif dan bukan karena user stop
+            if (_autoRestartEnabled &&
+                wasListening &&
+                _isSessionActive && // ✅ KUNCI: hanya jika sesi logis aktif
+                !_navigatedForSession &&
+                _speechEnabled &&
+                !_reinitInProgress) {
+              final now = DateTime.now();
+              final last =
+                  _lastAutoRestart ?? DateTime.fromMillisecondsSinceEpoch(0);
+              if (now.difference(last) > _autoRestartCooldown) {
+                _lastAutoRestart = now;
+                if (_lastPartial.isNotEmpty) {
+                  _fullBuffer = _mergeWithOverlap(_fullBuffer, _lastPartial);
+                  _lastPartial = '';
+                }
+                debugPrint(
+                    'Auto-restart triggered by status ($status). Restarting quickly...');
+                Future.delayed(const Duration(milliseconds: 150)).then((_) {
+                  if (!mounted) return;
+                  if (_isSessionActive && _speechEnabled && !_reinitInProgress) {
+                    try {
+                      _startListeningSession();
+                    } catch (e) {
+                      debugPrint('Auto-restart failed to start: $e');
+                    }
+                  }
+                });
+                return;
+              }
+            }
+
+            // Hanya kembalikan ke initial jika sesi logis TIDAK aktif
+            safeSetState(() {
+              if (_state != VoiceState.processing && !_isSessionActive) {
+                _state = VoiceState.initial;
+              }
+            });
+          }
+        },
+        onError: (error) async {
+          debugPrint('Speech error callback: $error');
+          final msg = error?.toString() ?? 'Unknown error';
+          safeSetState(() {
             _text = 'Speech error: $msg';
-            _speechEnabled = false;
-            _isListening = false;
-            _state = VoiceState.initial;
             _statusText = 'error';
           });
-          try {
-            _animController.stop();
-          } catch (_) {}
+
+          final errStr = msg.toLowerCase();
+          bool shouldRestart = false;
+
+          if (errStr.contains('error_no_match') ||
+              errStr.contains('not_matching') ||
+              errStr.contains('error_speech_timeout')) {
+            if (_lastPartial.isNotEmpty) {
+              _fullBuffer = _mergeWithOverlap(_fullBuffer, _lastPartial);
+              _lastPartial = '';
+            }
+            shouldRestart = true;
+          } else if (errStr.contains('error_client') ||
+              errStr.contains('permanent')) {
+            debugPrint('Client/permanent error: triggering reinit');
+            await _handleClientErrorAndReinit(errStr);
+            return;
+          }
+
+          if (shouldRestart &&
+              _autoRestartEnabled &&
+              _isSessionActive &&
+              !_reinitInProgress) {
+            await Future.delayed(const Duration(milliseconds: 250));
+            if (!mounted) return;
+            if (_isSessionActive && _speechEnabled && !_reinitInProgress) {
+              try {
+                _startListeningSession();
+              } catch (e) {
+                debugPrint('Restart after error failed: $e');
+              }
+            }
+            return;
+          }
+
+          // Hanya hentikan jika sesi TIDAK aktif
+          if (!_isSessionActive) {
+            try {
+              await _speech.stop();
+            } catch (_) {}
+            safeSetState(() {
+              _speechEnabled = false;
+              _isListening = false;
+              _state = VoiceState.initial;
+            });
+          }
         },
       );
 
@@ -150,6 +329,28 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
           _state = VoiceState.initial;
         });
       } else {
+        try {
+          final locales = await _speech.locales();
+          final systemLocale = await _speech.systemLocale();
+          debugPrint(
+            'Available locales: ${locales.map((l) => l.localeId).toList()}',
+          );
+          debugPrint('System locale: ${systemLocale?.localeId}');
+
+          final idLocale = locales.firstWhere(
+            (l) => l.localeId.toLowerCase().contains('id'),
+            orElse: () =>
+                systemLocale ??
+                (locales.isNotEmpty
+                    ? locales.first
+                    : LocaleName('id_ID', 'id_ID')),
+          );
+          _chosenLocale = idLocale.localeId;
+          debugPrint('Chosen locale: $_chosenLocale');
+        } catch (e) {
+          debugPrint('Gagal mendapatkan locales: $e');
+        }
+
         safeSetState(() {
           _speechEnabled = true;
           _statusText = 'ready';
@@ -167,14 +368,155 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     }
   }
 
+  Future<void> _handleClientErrorAndReinit(String reason) async {
+    if (_reinitInProgress) {
+      debugPrint('Reinit already in progress, skipping.');
+      return;
+    }
+    _reinitInProgress = true;
+    _reinitAttempts++;
+    debugPrint(
+      'handleClientErrorAndReinit triggered (#$_reinitAttempts): $reason',
+    );
+
+    try {
+      await _speech.cancel();
+    } catch (e) {
+      debugPrint('cancel() during reinit failed: $e');
+    }
+    final wait = Duration(milliseconds: (600 * (_reinitAttempts.clamp(1, 10))));
+    await Future.delayed(wait);
+
+    try {
+      await _initSpeech();
+      _reinitAttempts = 0;
+    } catch (e) {
+      debugPrint('Re-init gagal: $e');
+      safeSetState(() {
+        _speechEnabled = false;
+        _statusText = 'init_error_after_client_error';
+      });
+    } finally {
+      _reinitInProgress = false;
+    }
+  }
+
+  String _mergeWithOverlap(String prev, String next) {
+    final prevTrim = prev.trim();
+    final nextTrim = next.trim();
+    if (prevTrim.isEmpty) return nextTrim;
+    if (nextTrim.isEmpty) return prevTrim;
+
+    final prevWords = prevTrim.split(RegExp(r'\s+'));
+    final nextWords = nextTrim.split(RegExp(r'\s+'));
+
+    const int maxOverlap = 8;
+    final int tryOverlap = math.min(
+      maxOverlap,
+      math.min(prevWords.length, nextWords.length),
+    );
+
+    int bestK = 0;
+    for (int k = tryOverlap; k >= 1; k--) {
+      final prevSuffix = prevWords
+          .sublist(prevWords.length - k)
+          .join(' ')
+          .toLowerCase();
+      final nextPrefix = nextWords.sublist(0, k).join(' ').toLowerCase();
+      if (prevSuffix == nextPrefix) {
+        bestK = k;
+        break;
+      }
+    }
+
+    if (bestK == 0) {
+      return (prevTrim + ' ' + nextTrim).trim();
+    }
+
+    final merged =
+        prevWords.join(' ') + ' ' + nextWords.sublist(bestK).join(' ');
+    return merged.trim();
+  }
+
+  void _cancelRestartTimer() {
+    try {
+      _restartTimer?.cancel();
+    } catch (_) {}
+    _restartTimer = null;
+  }
+
+  Future<void> _startListeningSession() async {
+    if (!_speechEnabled || !_isSessionActive) return; // ✅ tambahan guard
+    _session++;
+    final int localSession = _session;
+
+    debugPrint('Memulai listening session: $localSession');
+
+    safeSetState(() {
+      _isListening = true;
+      _state = VoiceState.listening;
+      _statusText = 'listening';
+    });
+
+    _lastPartial = '';
+
+    try {
+      _animController.repeat();
+    } catch (_) {}
+
+    try {
+      await _speech.cancel();
+    } catch (e) {
+      debugPrint('cancel() failed: $e');
+    }
+    await Future.delayed(const Duration(milliseconds: 180));
+
+    try {
+      await _speech.listen(
+        onResult: (result) async {
+          if (localSession != _session) return;
+
+          _lastPartial = result.recognizedWords;
+          safeSetState(() {
+            _text = _lastPartial;
+          });
+
+          if (result.finalResult == true) {
+            final merged = _mergeWithOverlap(_fullBuffer, _lastPartial);
+            _fullBuffer = merged;
+            _lastPartial = '';
+            debugPrint(
+                'Final received and stitched into fullBuffer. length=${_fullBuffer.length}');
+          }
+        },
+        localeId: _chosenLocale,
+        listenFor: const Duration(hours: 2),
+        pauseFor: const Duration(minutes: 2),
+        partialResults: true,
+        cancelOnError: false,
+        onSoundLevelChange: (level) {},
+        onDevice: _preferOnDevice,
+      );
+
+      _cancelRestartTimer();
+    } catch (e, st) {
+      debugPrint('Exception saat _speech.listen: $e\n$st');
+      if (_isSessionActive) {
+        await _handleClientErrorAndReinit('exception_when_listen: $e');
+      }
+    }
+  }
+
   Future<void> _listenOrStop() async {
     if (!_speechEnabled) {
       safeSetState(() {
-        _text = 'Speech recognition belum siap. Mencoba inisialisasi...';
+        _text = 'Speech recognition belum siap. Menginisialisasi...';
         _statusText = 'retrying';
       });
       await _initSpeech();
-      return;
+      if (!_speechEnabled) {
+        return;
+      }
     }
 
     final perm = await Permission.microphone.status;
@@ -189,124 +531,49 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     }
 
     if (!_isListening) {
-      _session++;
-      final int localSession = _session;
-
-      safeSetState(() {
-        _isListening = true;
-        _state = VoiceState.listening;
-        _statusText = 'listening';
-        _text = '';
-      });
-
-      // mulai animasi visualizer
-      try {
-        _animController.repeat();
-      } catch (_) {}
-
-      _speech.listen(
-        onResult: (result) async {
-          if (localSession != _session) return;
-          safeSetState(() {
-            _text = result.recognizedWords;
-          });
-          if (result.finalResult == true) {
-            if (localSession != _session) return;
-            _session++;
-
-            final finalTranscript = result.recognizedWords;
-            try {
-              await _speech.stop();
-            } catch (_) {}
-
-            // hentikan animasi saat proses
-            try {
-              _animController.stop();
-            } catch (_) {}
-
-            safeSetState(() {
-              _isListening = false;
-              _state = VoiceState.processing;
-              _statusText = 'processing';
-              _text = 'Memproses hasil...';
-            });
-
-            // simulasi processing
-            await Future.delayed(const Duration(seconds: 1));
-            if (!mounted) return;
-
-            final toShow = finalTranscript.isNotEmpty
-                ? finalTranscript
-                : 'Tidak ada teks yang dikenali.';
-            if (!mounted) return;
-
-            // <-- PERBAIKAN: tambahkan username & token dari widget.user
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => VocareReport(
-                  reportText: toShow,
-                  username: widget.user.username,
-                  token: widget.user.token,
-                ),
-              ),
-            );
-
-            safeSetState(() {
-              _state = VoiceState.initial;
-              _statusText = 'ready';
-              _text = '';
-              _isListening = false;
-            });
-          }
-        },
-        localeId: 'id-ID',
-        listenFor: const Duration(seconds: 900),
-        pauseFor: const Duration(seconds: 30),
-        partialResults: true,
-        cancelOnError: true,
-      );
+      // 🔑 START SESI LOGIS
+      _isSessionActive = true;
+      _lastPartial = '';
+      _navigatedForSession = false;
+      _reinitAttempts = 0;
+      await _startListeningSession();
     } else {
-      // STOP listening (manual stop)
+      // 🔑 STOP SESI LOGIS
+      _isSessionActive = false;
       _session++;
-      final captured = _text;
+      _navigatedForSession = true;
 
       safeSetState(() {
         _isListening = false;
         _state = VoiceState.processing;
         _statusText = 'processing';
-        _text = 'Memproses hasil...';
       });
 
-      // hentikan animasi saat memproses hasil
       try {
         _animController.stop();
       } catch (_) {}
 
       try {
         await _speech.stop();
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('Error saat stop(): $e');
+      }
 
-      // simulasi processing
-      await Future.delayed(const Duration(milliseconds: 800));
+      _cancelRestartTimer();
+      await Future.delayed(const Duration(milliseconds: 300));
       if (!mounted) return;
 
-      final toShow = captured.isNotEmpty
-          ? captured
-          : 'Tidak ada teks yang dikenali.';
+      final captured = (_fullBuffer + ' ' + _lastPartial).trim();
+      final finalMerged = _mergeWithOverlap('', captured);
 
-      // navigasi ke report
+      _fullBuffer = '';
+      _lastPartial = '';
+
+      final toShow =
+          finalMerged.isNotEmpty ? finalMerged : 'Tidak ada teks yang dikenali.';
       if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => VocareReport(
-            reportText: toShow,
-            username: widget.user.username,
-            token: widget.user.token,
-          ),
-        ),
-      );
+      _navigateToReview(toShow);
 
-      // kembali ke state awal pada halaman voice
       safeSetState(() {
         _state = VoiceState.initial;
         _statusText = 'ready';
@@ -316,20 +583,140 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     }
   }
 
-  @override
-  void dispose() {
+  void _navigateToReview(String reportText) {
+    if (!mounted) return;
     try {
-      _speech.cancel();
-    } catch (_) {}
-    try {
-      _speech.stop();
-    } catch (_) {}
-    _animController.dispose();
-    super.dispose();
+      // ♻️ MODIFIED: Always set to perawat after first report, or handle as needed
+      safeSetState(() {
+        _activeQuestionSet = 'perawat';
+      });
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => VocareReport(
+            reportText: reportText,
+            username: widget.user.username,
+            token: widget.user.token,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Navigate error: $e');
+    }
+  }
+  
+  // ♻️ MODIFIED: _buildQuestions now handles loading and error states
+  Widget _buildQuestions() {
+    Widget content;
+
+    switch (_dataState) {
+      case DataState.loading:
+        content = const Center(child: CircularProgressIndicator());
+        break;
+      case DataState.error:
+        content = Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'Gagal memuat pertanyaan:\n$_errorMessage',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red),
+              ),
+              const SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: _fetchQuestions,
+                child: const Text('Coba Lagi'),
+              ),
+            ],
+          ),
+        );
+        break;
+      case DataState.loaded:
+        final bool isShowingPerawat = _activeQuestionSet == 'perawat';
+        final questions = isShowingPerawat ? _perawatQuestions : _pasienQuestions;
+        final title = isShowingPerawat
+            ? 'Pertanyaan Untuk Perawat:'
+            : 'Pertanyaan Untuk Pasien:';
+
+        content = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: questions.map((q) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(top: 6),
+                            child: Icon(Icons.circle, size: 8),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              q,
+                              style: const TextStyle(fontSize: 15, height: 1.3),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () {
+                    safeSetState(() {
+                      _activeQuestionSet =
+                          isShowingPerawat ? 'pasien' : 'perawat';
+                    });
+                  },
+                  child: Text(isShowingPerawat
+                      ? 'Lihat Pertanyaan Pasien'
+                      : 'Lihat Pertanyaan Perawat'),
+                ),
+              ],
+            ),
+          ],
+        );
+        break;
+    }
+
+    return SizedBox(
+      height: 360,
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 3,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: content,
+        ),
+      ),
+    );
   }
 
+  // ... (No changes in _buildCenterContent or _buildBar)
   Widget _buildCenterContent() {
     const blue = Color(0xFF093275);
+    const double micSize = 110;
+    const double iconSize = 36;
+    const double tapTextSize = 14;
+
     switch (_state) {
       case VoiceState.initial:
         return Column(
@@ -338,32 +725,25 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
             GestureDetector(
               onTap: _speechEnabled ? _listenOrStop : _initSpeech,
               child: Container(
-                width: 160,
-                height: 160,
-                decoration: BoxDecoration(color: blue, shape: BoxShape.circle),
-                child: const Center(
-                  child: Icon(Icons.mic, size: 64, color: Colors.white),
+                width: micSize,
+                height: micSize,
+                decoration:
+                    BoxDecoration(color: blue, shape: BoxShape.circle),
+                child: Center(
+                  child: Icon(Icons.mic, size: iconSize, color: Colors.white),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             const Text(
               'Tap To Speak',
               style: TextStyle(
                 fontWeight: FontWeight.w700,
-                fontSize: 16,
+                fontSize: tapTextSize,
                 color: Color(0xFF093275),
               ),
             ),
-            const SizedBox(height: 24),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Text(
-                _text,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 18),
-              ),
-            ),
+            const SizedBox(height: 12),
           ],
         );
 
@@ -372,69 +752,58 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
           animation: _animController,
           builder: (context, child) {
             final v = _animController.value;
-
-            final double phase1 = 0.0;
-            final double phase2 = 2 * math.pi / 5;
-            final double phase3 = 4 * math.pi / 5;
-            final double phase4 = 6 * math.pi / 5;
-            final double phase5 = 8 * math.pi / 5;
-
+            final double phaseStep = 2 * math.pi / 5;
             double amp(double phase) =>
                 0.5 + 0.5 * math.sin(2 * math.pi * v + phase);
 
-            const double baseHeight = 18.0;
-            const double extraHeight = 80.0;
-
-            final h1 = baseHeight + amp(phase1) * extraHeight;
-            final h2 = baseHeight + amp(phase2) * extraHeight;
-            final h3 = baseHeight + amp(phase3) * extraHeight;
-            final h4 = baseHeight + amp(phase4) * extraHeight;
-            final h5 = baseHeight + amp(phase5) * extraHeight;
+            const double baseHeight = 12.0;
+            const double extraHeight = 48.0;
 
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 SizedBox(
                   height: baseHeight + extraHeight + 8,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildBar(h1),
-                      const SizedBox(width: 8),
-                      _buildBar(h2),
-                      const SizedBox(width: 8),
-                      _buildBar(h3),
-                      const SizedBox(width: 8),
-                      _buildBar(h4),
-                      const SizedBox(width: 8),
-                      _buildBar(h5),
-                    ],
+                    children: List.generate(5, (i) {
+                      final phase = phaseStep * i;
+                      final h = baseHeight + amp(phase) * extraHeight;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        child: _buildBar(h),
+                      );
+                    }),
                   ),
                 ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Mendengarkan...',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 18,
-                    color: Color(0xFF093275),
-                  ),
-                ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 ElevatedButton.icon(
                   onPressed: _listenOrStop,
-                  icon: const Icon(Icons.stop),
+                  icon: const Icon(Icons.stop, size: 18),
                   label: const Text('Stop'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
                     ),
                   ),
                 ),
+                // 🔍 Opsional: info saat engine sedang restart
+                if (!_isListening && _isSessionActive)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Restart otomatis... lanjutkan berbicara',
+                      style: TextStyle(color: Colors.orange, fontSize: 12),
+                    ),
+                  ),
               ],
             );
           },
@@ -445,16 +814,16 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
           mainAxisSize: MainAxisSize.min,
           children: const [
             SizedBox(
-              width: 80,
-              height: 80,
-              child: CircularProgressIndicator(strokeWidth: 6),
+              width: 60,
+              height: 60,
+              child: CircularProgressIndicator(strokeWidth: 5),
             ),
-            SizedBox(height: 16),
+            SizedBox(height: 12),
             Text(
               'Loading',
               style: TextStyle(
                 fontWeight: FontWeight.w700,
-                fontSize: 16,
+                fontSize: 14,
                 color: Color(0xFF093275),
               ),
             ),
@@ -463,10 +832,9 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     }
   }
 
-  // helper builder untuk satu bar kecil
   Widget _buildBar(double height) {
     return Container(
-      width: 10,
+      width: 8,
       height: height,
       decoration: BoxDecoration(
         color: const Color(0xFF093275),
@@ -481,7 +849,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
       backgroundColor: const Color(0xFFD7E2FD),
       appBar: AppBar(
         titleSpacing: 30,
-        title: Text(
+        title: const Text(
           'Vocare Report',
           style: TextStyle(fontSize: 20, color: Color(0xFF093275)),
         ),
@@ -492,27 +860,12 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
           children: [
             const SizedBox(height: 8),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline, color: Color(0xFF093275)),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Status: $_statusText',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                  ),
-                  if (!_speechEnabled)
-                    IconButton(
-                      onPressed: _initSpeech,
-                      icon: const Icon(Icons.refresh, color: Color(0xFF093275)),
-                    ),
-                ],
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: _buildQuestions(),
             ),
             const SizedBox(height: 8),
-            Expanded(
+            SizedBox(
+              height: 200,
               child: Center(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -520,23 +873,25 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: 24.0,
                 vertical: 12.0,
               ),
               child: Text(
-                _statusText == 'processing'
-                    ? 'Memproses...'
-                    : _statusText.isNotEmpty
-                    ? 'Status: $_statusText'
-                    : '',
+                _isListening
+                    ? 'Mendengarkan...'
+                    : (_statusText == 'ready'
+                        ? 'Siap Merekam'
+                        : _isSessionActive
+                            ? 'Sesi aktif – lanjutkan berbicara'
+                            : 'Status: $_statusText'),
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 14),
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 12),
           ],
         ),
       ),

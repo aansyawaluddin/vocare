@@ -16,34 +16,59 @@ class LaporanWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Riwayat Laporan :',
-          style: TextStyle(
-            color: navy,
-            fontWeight: FontWeight.w700,
-            fontSize: isCompact ? 14 : 16,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Column(
-          children: reports
-              .map(
-                (r) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12.0),
-                  child: ReportCard(
-                    navy: navy,
-                    cardBlue: cardBlue,
-                    name: r['name']!,
-                    date: r['date']!,
-                  ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasBoundedHeight = constraints.maxHeight.isFinite;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Riwayat Laporan :',
+              style: TextStyle(
+                color: navy,
+                fontWeight: FontWeight.w700,
+                fontSize: isCompact ? 14 : 16,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (hasBoundedHeight)
+              Expanded(
+                child: ListView.separated(
+                  itemCount: reports.length,
+                  padding: EdgeInsets.zero,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, idx) {
+                    final r = reports[idx];
+                    return ReportCard(
+                      navy: navy,
+                      cardBlue: cardBlue,
+                      name: r['name'] ?? '-',
+                      date: r['date'] ?? '-',
+                    );
+                  },
                 ),
               )
-              .toList(),
-        ),
-      ],
+            else
+              // Parent tidak memberi batas -> ListView jangan coba scroll sendiri
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: reports.length,
+                padding: EdgeInsets.zero,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (context, idx) {
+                  final r = reports[idx];
+                  return ReportCard(
+                    navy: navy,
+                    cardBlue: cardBlue,
+                    name: r['name'] ?? '-',
+                    date: r['date'] ?? '-',
+                  );
+                },
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -77,7 +102,7 @@ class ReportCard extends StatelessWidget {
             child: Icon(Icons.article_outlined, color: Colors.white, size: 28),
           ),
         ),
-        const SizedBox(width: 0),
+        const SizedBox(width: 8),
         Expanded(
           child: ClipPath(
             clipper: RightArrowClipper(),
