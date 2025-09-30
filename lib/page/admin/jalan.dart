@@ -4,7 +4,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:vocare/common/type.dart';
 import 'package:vocare/widgets/admin/inap_widget.dart';
-import 'package:vocare/widgets/inap_widget.dart';
 
 class PasienJalanAdmin extends StatefulWidget {
   final User user;

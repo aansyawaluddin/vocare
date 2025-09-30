@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:vocare/common/type.dart';
 import 'package:vocare/page/login/login.dart';
-import 'package:vocare/widgets/inap_widget.dart';
 import 'package:vocare/widgets/perawat.dart';
 
 class HomeKetuaTimPage extends StatefulWidget {

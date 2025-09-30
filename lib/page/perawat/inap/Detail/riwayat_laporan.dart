@@ -4,9 +4,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:vocare/common/type.dart';
-import 'package:vocare/page/perawat/inap/detail_laporan.dart';
+import 'package:vocare/page/perawat/inap/Detail/detail_laporan.dart';
 import 'package:vocare/page/perawat/inap/voice.dart';
-import 'package:vocare/page/perawat/laporan/voice.dart';
 
 class DaftarRiwayatPage extends StatefulWidget {
   final User user;
@@ -282,40 +281,6 @@ class _DaftarRiwayatPageState extends State<DaftarRiwayatPage> {
               const SizedBox(height: 15),
               Expanded(child: _buildBody()),
             ],
-          ),
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(20, 8, 20, 18),
-        child: Padding(
-          padding: const EdgeInsets.only(top: 6.0),
-          child: SizedBox(
-            height: 56,
-            child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => VoicePageLaporanTambahan(
-                      user: widget.user,
-                      patientId: widget.patientId,
-                    ),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text(
-                'Laporan Baru',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: buttonTambah,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 0,
-              ),
-            ),
           ),
         ),
       ),

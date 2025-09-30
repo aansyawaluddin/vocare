@@ -4,7 +4,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:vocare/common/type.dart';
-import 'package:vocare/page/perawat/inap/detail_laporan.dart';
+import 'package:vocare/page/perawat/inap/Detail/detail_laporan.dart';
 import 'package:vocare/page/perawat/inap/voice.dart';
 
 class DaftarRiwayatAdminPage extends StatefulWidget {

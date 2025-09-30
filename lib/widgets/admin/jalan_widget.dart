@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:vocare/common/type.dart';
 import 'package:vocare/page/admin/riwayat_laporan.dart';
-import 'package:vocare/page/perawat/inap/riwayat_laporan.dart';
+import 'package:vocare/page/perawat/inap/Detail/riwayat_laporan.dart';
 
 class PasienJalanWidget extends StatefulWidget {
   const PasienJalanWidget({

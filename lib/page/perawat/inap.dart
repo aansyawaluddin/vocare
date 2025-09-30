@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:vocare/common/type.dart';
-import 'package:vocare/widgets/inap_widget.dart';
+import 'package:vocare/page/perawat/inap/detail_pasien.dart';
 
 class PasienInap extends StatefulWidget {
   final User user;
@@ -17,8 +17,7 @@ class PasienInap extends StatefulWidget {
 class _PasienInapState extends State<PasienInap> {
   bool _isLoading = true;
   String? _error;
-  List<Map<String, String>> _inpatientsForUI = [];
-  List<String> _rooms = ['Semua Ruangan'];
+  List<Map<String, dynamic>> _inpatientsForUI = [];
 
   final Color navyColor = const Color(0xFF093275);
   final Color cardBlueColor = const Color(0xFFD7E2FD);
@@ -46,121 +45,65 @@ class _PasienInapState extends State<PasienInap> {
       _error = null;
     });
 
+    List<Map<String, dynamic>> loadedForUI = [];
+
     try {
+      final baseUrl = _getBaseUrl();
+      if (baseUrl.isEmpty) {
+        throw Exception('API base URL tidak diset (periksa .env).');
+      }
+
       final patientsResponse = await http.get(
-        Uri.parse('${_getBaseUrl()}/patients/'),
+        Uri.parse('$baseUrl/patients/'),
         headers: _getAuthHeaders(),
       );
-      debugPrint('patientsResponse.statusCode: ${patientsResponse.statusCode}');
-      debugPrint('patientsResponse.body: ${patientsResponse.body}');
 
       if (patientsResponse.statusCode != 200) {
-        throw Exception(
-          'Gagal memuat data pasien: ${patientsResponse.statusCode}',
-        );
+        throw Exception('Gagal memuat data pasien: ${patientsResponse.statusCode}');
       }
 
       dynamic patientsBody = jsonDecode(patientsResponse.body);
-      List<dynamic> patientsData =
-          (patientsBody is Map && patientsBody.containsKey('data'))
-          ? patientsBody['data']
-          : patientsBody;
 
-      debugPrint('patientsData length: ${patientsData.length}');
-      if (patientsData.isNotEmpty)
-        debugPrint('patientsData[0]: ${patientsData[0].toString()}');
+      List<dynamic> patientsData;
+      if (patientsBody is Map &&
+          patientsBody.containsKey('data') &&
+          patientsBody['data'] is List) {
+        patientsData = List<dynamic>.from(patientsBody['data']);
+      } else if (patientsBody is List) {
+        patientsData = List<dynamic>.from(patientsBody);
+      } else {
+        patientsData = [];
+      }
 
       final List<Map<String, dynamic>> patientMaps = patientsData
           .where((e) => e != null)
-          .map(
-            (e) =>
-                (e is Map) ? Map<String, dynamic>.from(e) : <String, dynamic>{},
-          )
+          .map((e) => (e is Map) ? Map<String, dynamic>.from(e) : <String, dynamic>{})
           .toList();
-
-      if (patientMaps.isNotEmpty) {
-        debugPrint('patientMaps[0] keys: ${patientMaps[0].keys.toList()}');
-        debugPrint('patientMaps[0] raw: ${patientMaps[0].toString()}');
-      }
-
+      
       final inpatients = patientMaps.where((p) {
-        final status =
-            (p['status_rawat'] ?? p['statusRawat'] ?? p['status'] ?? '')
-                .toString()
-                .toLowerCase();
-        return status.contains('rawat_inap') ||
-            status.contains('rawat inap') ||
-            status.contains('inap');
+        final rawStatus = (p['status_rawat'] ?? p['statusRawat'] ?? p['status'] ?? '')
+            .toString()
+            .toLowerCase();
+        return rawStatus.contains('rawat_inap') ||
+            rawStatus.contains('rawat inap') ||
+            rawStatus.contains('inap');
       }).toList();
 
-      String extractId(Map<String, dynamic> patient) {
-        final candidates = [
-          patient['id'],
-          patient['patient_id'],
-          patient['uuid'],
-          patient['_id'],
-          patient['no_rekam_medis'],
-        ];
-        if (patient.containsKey('attributes') && patient['attributes'] is Map) {
-          final attr = Map<String, dynamic>.from(patient['attributes']);
-          candidates.addAll([
-            attr['id'],
-            attr['patient_id'],
-            attr['uuid'],
-            attr['_id'],
-          ]);
-        }
-        for (var c in candidates) if (c != null) return c.toString();
-        return '-';
-      }
-
-      _inpatientsForUI = inpatients.map((patient) {
-        return {
-          'id': extractId(patient),
-          'no_rekam_medis':
-              (patient['no_rekam_medis'] ??
-                      patient['noRekamMedis'] ??
-                      patient['rm'] ??
-                      patient['rekam_medis'])
-                  ?.toString() ??
-              '-',
-          'nama': (patient['nama'] ?? patient['name'])?.toString() ?? '-',
-          'jenis_kelamin':
-              (patient['jenis_kelamin'] ??
-                      patient['jenisKelamin'] ??
-                      patient['gender'])
-                  ?.toString() ??
-              '-',
-          'status_rawat':
-              (patient['status_rawat'] ??
-                      patient['statusRawat'] ??
-                      patient['status'])
-                  ?.toString() ??
-              '-',
-          'room':
-              (patient['room'] ?? patient['ruangan'] ?? patient['ward'])
-                  ?.toString() ??
-              'ICU',
-        };
+      // Menggunakan seluruh data pasien untuk halaman detail
+      loadedForUI = inpatients.map((patient) {
+        return Map<String, dynamic>.from(patient);
       }).toList();
 
-      debugPrint(
-        '_inpatientsForUI[0]: ${_inpatientsForUI.isNotEmpty ? _inpatientsForUI[0].toString() : 'empty'}',
-      );
-
-      final roomsFromData = _inpatientsForUI
-          .map((p) => p['room'])
-          .toSet()
-          .toList();
-      setState(() {
-        _rooms = ['Semua Ruangan', ...roomsFromData.cast<String>()];
-      });
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('Error saat fetch pasien: $e\n$st');
       _error = e.toString();
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _inpatientsForUI = loadedForUI;
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -174,9 +117,19 @@ class _PasienInapState extends State<PasienInap> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Text(
-            'Terjadi kesalahan: $_error',
-            textAlign: TextAlign.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Terjadi kesalahan: $_error',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: _fetchAndProcessInpatients,
+                child: const Text('Coba lagi'),
+              ),
+            ],
           ),
         ),
       );
@@ -186,7 +139,6 @@ class _PasienInapState extends State<PasienInap> {
       return const Center(child: Text('Belum ada data pasien rawat inap.'));
     }
 
-    // <-- Ganti menjadi LayoutBuilder + SizedBox supaya child mendapat height yang jelas
     return LayoutBuilder(
       builder: (context, constraints) {
         return SizedBox(
@@ -194,14 +146,171 @@ class _PasienInapState extends State<PasienInap> {
           width: constraints.maxWidth,
           child: PasienInapWidget(
             user: widget.user,
-            rooms: _rooms,
             inpatients: _inpatientsForUI,
             navy: navyColor,
             cardBlue: cardBlueColor,
-            role: 'perawat',
           ),
         );
       },
     );
   }
+}
+
+class PasienInapWidget extends StatelessWidget {
+  const PasienInapWidget({
+    super.key,
+    required this.inpatients,
+    required this.navy,
+    required this.cardBlue,
+    required this.user,
+  });
+
+  final List<Map<String, dynamic>> inpatients;
+  final Color navy;
+  final Color cardBlue;
+  final User user;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Pasien Rawat Inap :',
+          style: TextStyle(
+            color: navy,
+            fontWeight: FontWeight.w700,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: ListView.builder(
+            padding: EdgeInsets.zero,
+            itemCount: inpatients.length,
+            itemBuilder: (context, index) {
+              final p = inpatients[index];
+              final id = p['id']?.toString() ?? '-';
+              final nama = p['nama']?.toString() ?? '-';
+              final noRm = p['no_rekam_medis']?.toString() ?? '-';
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: InpatientCard(
+                  key: ValueKey('inpatient_$id'),
+                  navy: navy,
+                  cardBlue: cardBlue,
+                  noRekamMedis: noRm,
+                  nama: nama,
+                  // MODIFIED: Navigasi ke PatientDetailPage dengan membawa seluruh data pasien
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => PatientDetailPage(
+                          user: user,
+                          patientData: p,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class InpatientCard extends StatelessWidget {
+  const InpatientCard({
+    super.key,
+    required this.navy,
+    required this.cardBlue,
+    required this.noRekamMedis,
+    required this.nama,
+    this.onTap,
+  });
+
+  final Color navy;
+  final Color cardBlue;
+  final String noRekamMedis;
+  final String nama;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 50,
+          height: 70,
+          decoration: BoxDecoration(
+            color: navy,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Center(
+            child: Icon(Icons.person_outline, color: Colors.white, size: 28),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: ClipPath(
+            clipper: RightArrowClipper(),
+            child: Material(
+              color: cardBlue,
+              child: InkWell(
+                onTap: onTap,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                  height: 70,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'No. RM : $noRekamMedis',
+                        style: TextStyle(
+                          color: navy,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Nama : $nama',
+                        style: TextStyle(
+                          color: navy.withOpacity(0.95),
+                          fontSize: 12,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class RightArrowClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.moveTo(0, 0);
+    path.lineTo(size.width - 18, 0);
+    path.lineTo(size.width, size.height / 2);
+    path.lineTo(size.width - 18, size.height);
+    path.lineTo(0, size.height);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }

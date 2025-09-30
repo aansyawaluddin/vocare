@@ -173,7 +173,6 @@ class _PasienInapAdminState extends State<PasienInapAdmin> {
       return const Center(child: Text('Belum ada data pasien rawat inap.'));
     }
 
-    // <-- Ganti menjadi LayoutBuilder + SizedBox supaya child mendapat height yang jelas
     return LayoutBuilder(
       builder: (context, constraints) {
         return SizedBox(
