@@ -23,8 +23,7 @@ class _AppDimensions {
 
   static const double cardPadding = 16.0;
   static const double cardRadius = 12.0;
-  static const double labelWidth =
-      180.0; // Disesuaikan agar label lebih panjang
+  static const double labelWidth = 180.0;
 }
 
 const _AppColors _colors = _AppColors();
@@ -102,11 +101,11 @@ Widget buildSectionCard(String title, List<Widget> rows) {
   );
 }
 
-// ----------------------- Section Builders (MODIFIED) -----------------------
-
+/// -------------------------
+/// UI: Section builders (dipakai di screen)
+/// -------------------------
 Widget buildInformasiUmumSection(Map<String, dynamic> extractedFields) {
   return buildSectionCard('1. Informasi Pasien & Kunjungan', [
-    // Informasi Umum Pasien
     buildInfoRow('No. Rekam Medis (RM)', extractedFields['no_rm']?.toString()),
     buildInfoRow('Nama Pasien', extractedFields['nama_pasien']?.toString()),
     buildInfoRow('Jenis Kelamin', extractedFields['jenis_kelamin']?.toString()),
@@ -117,18 +116,30 @@ Widget buildInformasiUmumSection(Map<String, dynamic> extractedFields) {
       extractedFields['status_perkawinan']?.toString(),
     ),
     buildInfoRow('Alamat', extractedFields['alamat']?.toString()),
-
+    Text(
+      'Penanggung Jawab Pasien:',
+      style: TextStyle(fontWeight: FontWeight.w600),
+    ),
+    buildInfoRow('Nama ', extractedFields['penanggung_jawab']?.toString()),
+    buildInfoRow(
+      'Hubungan ',
+      extractedFields['hubungan_penanggung_jawab']?.toString(),
+    ),
+    buildInfoRow(
+      'Kontak ',
+      extractedFields['kontak_penanggung_jawab']?.toString(),
+    ),
     const Divider(),
     Text('Informasi Kunjungan:', style: TextStyle(fontWeight: FontWeight.w600)),
-    // Informasi Kunjungan
     buildInfoRow(
       'Tanggal Kunjungan',
-      extractedFields['tanggal_kunjungan']?.toString(),
+      extractedFields['tanggal_masuk']?.toString(),
     ),
-    buildInfoRow('Jam Kunjungan', extractedFields['jam_kunjungan']?.toString()),
+    buildInfoRow('Jam Kunjungan', extractedFields['waktu_masuk']?.toString()),
     buildInfoRow('Poli Tujuan', extractedFields['poli']?.toString()),
-    buildInfoRow('Kelas Pelayanan', extractedFields['kelas']?.toString()),
+    buildInfoRow('Kelas Pelayanan', extractedFields['pelayanan']?.toString()),
     buildInfoRow('Cara Masuk', extractedFields['cara_masuk']?.toString()),
+    buildInfoRow('Pendamping', extractedFields['pendamping']?.toString()),
     buildInfoRow(
       'Sumber Data Anamnesa',
       extractedFields['sumber_data']?.toString(),
@@ -137,42 +148,8 @@ Widget buildInformasiUmumSection(Map<String, dynamic> extractedFields) {
   ]);
 }
 
-Widget buildPengantarPendampingSection(Map<String, dynamic> extractedFields) {
-  return buildSectionCard('2. Penanggung Jawab & Pendamping', [
-    // Penanggung Jawab
-    Text(
-      'Penanggung Jawab Pasien:',
-      style: TextStyle(fontWeight: FontWeight.w600),
-    ),
-    buildInfoRow('Nama PJ', extractedFields['penanggung_jawab']?.toString()),
-    buildInfoRow(
-      'Hubungan PJ',
-      extractedFields['hubungan_penanggung_jawab']?.toString(),
-    ),
-    buildInfoRow(
-      'Kontak PJ',
-      extractedFields['kontak_penanggung_jawab']?.toString(),
-    ),
-
-    const Divider(),
-    // Pendamping (dari data kunjungan)
-    Text(
-      'Informasi Pendamping:',
-      style: TextStyle(fontWeight: FontWeight.w600),
-    ),
-    buildInfoRow(
-      'Nama Pendamping',
-      extractedFields['pendamping']['nama']?.toString(),
-    ),
-    buildInfoRow(
-      'Hubungan',
-      extractedFields['hubungan_penanggung_jawab']?.toString(),
-    ),
-  ]);
-}
-
 Widget buildKeluhanUtamaSection(Map<String, dynamic> extractedFields) {
-  return buildSectionCard('3. Keluhan Utama', [
+  return buildSectionCard('2. Keluhan Utama', [
     buildInfoRow(
       'Keluhan Utama',
       extractedFields['keluhan_utama']?.toString(),
@@ -182,11 +159,10 @@ Widget buildKeluhanUtamaSection(Map<String, dynamic> extractedFields) {
 }
 
 Widget buildRiwayatKesehatanSection(Map<String, dynamic> extractedFields) {
-  return buildSectionCard('4. Riwayat & Pemeriksaan Sistem', [
-    // Riwayat Penyakit (dari pemeriksaan_sistem)
+  return buildSectionCard('3. Riwayat & Pemeriksaan Sistem', [
     buildInfoRow(
       'Riwayat Penyakit Dahulu',
-      extractedFields['riwayat_penyakit_dahulu']?.toString(),
+      extractedFields['riwayat_penyakit_dahulu'],
     ),
     buildInfoRow(
       'Riwayat Operasi',
@@ -196,34 +172,22 @@ Widget buildRiwayatKesehatanSection(Map<String, dynamic> extractedFields) {
       'Riwayat Transfusi Darah',
       extractedFields['riwayat_transfusi']?.toString(),
     ),
-
     const Divider(),
-    // Pemeriksaan Sistem Tambahan (dari pemeriksaan_sistem)
-    Text('Sistem Tubuh:', style: TextStyle(fontWeight: FontWeight.w600)),
     buildInfoRow('Nafsu Makan', extractedFields['nafsu_makan']?.toString()),
     buildInfoRow(
       'Perubahan Berat Badan',
       extractedFields['perubahan_berat_badan']?.toString(),
     ),
-
     const Divider(),
-    // Alergi
-    Text('Alergi:', style: TextStyle(fontWeight: FontWeight.w600)),
     buildInfoRow('Alergi', extractedFields['alergi']?.toString(), bold: true),
   ]);
 }
 
 Widget buildStatusGeneralSection(Map<String, dynamic> extractedFields) {
-  return buildSectionCard('5. Status General, Antropometri & Tanda Vital', [
-    // Status General & Antropometri
-    Text('Status General:', style: TextStyle(fontWeight: FontWeight.w600)),
+  return buildSectionCard('4. Status General & Tanda Vital', [
     buildInfoRow('Tingkat Kesadaran', extractedFields['kesadaran']?.toString()),
-    buildInfoRow('Tinggi Badan', extractedFields['tinggi_badan']?.toString()),
-    buildInfoRow('Berat Badan', extractedFields['berat_badan']?.toString()),
-
     const Divider(),
     Text('Tanda Vital:', style: TextStyle(fontWeight: FontWeight.w600)),
-    // Tanda Vital
     buildInfoRow('Tekanan Darah', extractedFields['tekanan_darah']?.toString()),
     buildInfoRow('Denyut Nadi', extractedFields['nadi']?.toString()),
     buildInfoRow('Laju Pernapasan', extractedFields['respirasi']?.toString()),
@@ -232,7 +196,7 @@ Widget buildStatusGeneralSection(Map<String, dynamic> extractedFields) {
 }
 
 Widget buildPemeriksaanFisikSection(Map<String, dynamic> extractedFields) {
-  return buildSectionCard('6. Pemeriksaan Fisik (Per Sistem)', [
+  return buildSectionCard('5. Pemeriksaan Fisik (Per Sistem)', [
     buildInfoRow('Kepala & Mata', extractedFields['kepala']?.toString()),
     buildInfoRow('THT', extractedFields['tht']?.toString()),
     buildInfoRow('Mulut', extractedFields['mulut']?.toString()),
@@ -247,34 +211,41 @@ Widget buildPemeriksaanFisikSection(Map<String, dynamic> extractedFields) {
 }
 
 Widget buildAsesmenNyeriSection(Map<String, dynamic> extractedFields) {
-  return buildSectionCard('7. Asesmen Nyeri', [
+  return buildSectionCard('6. Asesmen Nyeri', [
     buildInfoRow('Lokasi', extractedFields['lokasi_nyeri']?.toString()),
     buildInfoRow(
       'Sifat (Karakter)',
       extractedFields['karakter_nyeri']?.toString(),
     ),
     buildInfoRow(
-      'Skala Nyeri',
-      extractedFields['skor']?.toString(),
-      bold: true,
-    ),
-    buildInfoRow(
       'Faktor Pencetus',
       extractedFields['faktor_pencetus_nyeri']?.toString(),
     ),
     buildInfoRow(
-      'Faktor Pereda',
-      extractedFields['faktor_pereda_nyeri']?.toString(),
+      'Faktor Penghilang',
+      extractedFields['faktor_penghilang_nyeri']?.toString(),
+      bold: true,
+    ),
+    buildInfoRow(
+      'Skala Nyeri',
+      extractedFields['skala']?.toString(),
     ),
   ]);
 }
 
 Widget buildSkriningGiziSection(Map<String, dynamic> extractedFields) {
-  return buildSectionCard('8. Skrining Gizi', [
-    buildInfoRow('Skor', extractedFields['mna_sf']?.toString()),
+  return buildSectionCard('7. Skrining Gizi', [
+    buildInfoRow('Skor', extractedFields['skor_gizi']?.toString()),
+    buildInfoRow('Tinggi Badan', extractedFields['tinggi_badan']?.toString()),
+    buildInfoRow('Berat Badan', extractedFields['berat_badan']?.toString()),
+    buildInfoRow('IMT', extractedFields['IMT']?.toString()),
     buildInfoRow(
-      'Kategori',
-      extractedFields['kategori_gizi']?.toString(),
+      'Penurunan Berat Badan',
+      extractedFields['penurunan_berat_badan']?.toString(),
+    ),
+    buildInfoRow(
+      'Status Gizi',
+      extractedFields['status_gizi']?.toString(),
       bold: true,
     ),
   ]);
@@ -317,7 +288,6 @@ Widget buildStatusPsikososialSection(Map<String, dynamic> extractedFields) {
       'Gangguan Jiwa',
       extractedFields['riwayat_gangguan_jiwa']?.toString(),
     ),
-
     const Divider(),
     Text('Kondisi Sosial:', style: TextStyle(fontWeight: FontWeight.w600)),
     buildInfoRow('Pendidikan', extractedFields['pendidikan']?.toString()),
@@ -325,7 +295,6 @@ Widget buildStatusPsikososialSection(Map<String, dynamic> extractedFields) {
       'Status Ekonomi',
       extractedFields['status_ekonomi']?.toString(),
     ),
-
     const Divider(),
     Text('Spiritual & Edukasi:', style: TextStyle(fontWeight: FontWeight.w600)),
     buildInfoRow(
@@ -354,121 +323,153 @@ Widget buildRencanaPerawatanSection(Map<String, dynamic> extractedFields) {
 }
 
 Widget buildMasalahKeperawatanSection(Map<String, dynamic> extractedFields) {
-  // Masalah Keperawatan adalah List<String> di JSON
   final List<dynamic> masalahList =
       extractedFields['masalah_keperawatan_list'] is List
-      ? extractedFields['masalah_keperawatan_list'] as List<dynamic>
-      : [];
+          ? extractedFields['masalah_keperawatan_list'] as List<dynamic>
+          : [];
 
-  final String masalahDisplay = masalahList.isEmpty
-      ? '-'
-      : masalahList.map((e) => e.toString()).join(', ');
+  final String masalahDisplay =
+      masalahList.isEmpty ? '-' : masalahList.map((e) => e.toString()).join(', ');
 
   return buildSectionCard('12. Masalah Keperawatan', [
     buildInfoRow('Daftar Masalah', masalahDisplay, bold: true),
   ]);
 }
 
-Widget _buildSignatureActions(VoidCallback onClear, VoidCallback onPick) {
-  return Row(
-    children: [
-      ElevatedButton.icon(
-        onPressed: onClear,
-        icon: const Icon(Icons.delete_outline),
-        label: const Text('Hapus'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.redAccent,
-          foregroundColor: Colors.white,
-        ),
-      ),
-      const SizedBox(width: 8),
-      ElevatedButton.icon(
-        onPressed: onPick,
-        icon: const Icon(Icons.edit),
-        label: const Text('Ganti'),
-      ),
-    ],
-  );
+
+class RencanaAsuhanEditor extends StatefulWidget {
+  final List<String> initialRencana;
+  final void Function(List<String>)? onChanged;
+  final bool editable;
+
+  const RencanaAsuhanEditor({
+    Key? key,
+    this.initialRencana = const [],
+    this.onChanged,
+    this.editable = true,
+  }) : super(key: key);
+
+  @override
+  _RencanaAsuhanEditorState createState() => _RencanaAsuhanEditorState();
 }
 
-Widget _buildSignaturePlaceholder(VoidCallback onPick) {
-  return GestureDetector(
-    onTap: onPick,
-    child: Container(
-      width: double.infinity,
-      height: 120,
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: _colors.cardBorder,
-          width: 2,
-          style: BorderStyle.solid,
+class _RencanaAsuhanEditorState extends State<RencanaAsuhanEditor> {
+  late List<String> _items;
+
+  @override
+  void initState() {
+    super.initState();
+    _items = List<String>.from(widget.initialRencana);
+  }
+
+  void _notify() {
+    widget.onChanged?.call(List<String>.from(_items));
+    setState(() {});
+  }
+
+  Future<void> _showEditDialog({String? current, int? index}) async {
+    final controller = TextEditingController(text: current ?? '');
+    final isNew = index == null;
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: Text(isNew ? 'Tambah Rencana Asuhan' : 'Ubah Rencana Asuhan'),
+        content: TextField(
+          controller: controller,
+          maxLines: 4,
+          decoration: const InputDecoration(hintText: 'Tulis rencana asuhan...'),
         ),
-        borderRadius: BorderRadius.circular(8),
-        color: Colors.grey.shade50,
-      ),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.upload_file,
-              size: 28,
-              color: _colors.headingBlue.withOpacity(0.8),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Batal')),
+          ElevatedButton(
+            style: ButtonStyle(
+              backgroundColor: MaterialStateProperty.all(_colors.buttonSave),
             ),
-            const SizedBox(height: 6),
-            Text(
-              'Belum ada tanda tangan\nKetuk untuk pilih file',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _colors.headingBlue.withOpacity(0.8),
-                fontSize: 14,
+            onPressed: () {
+              final val = controller.text.trim();
+              if (val.isEmpty) return;
+              if (isNew) {
+                _items.add(val);
+              } else {
+                _items[index!] = val;
+              }
+              Navigator.of(ctx).pop();
+              _notify();
+            },
+            child: const Text('Simpan', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.editable && _items.isEmpty) {
+      return buildInfoCard(child: Text('-'));
+    }
+
+    return buildSectionCard(
+      '13 Rencana Asuhan Keperawatan',
+      [
+        if (_items.isEmpty) const Text('Belum ada rencana asuhan.'),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _items.length,
+          itemBuilder: (context, idx) {
+            final text = _items[idx];
+            return Dismissible(
+              key: ValueKey('rencana_${idx}_${text.hashCode}'),
+              direction: widget.editable ? DismissDirection.endToStart : DismissDirection.none,
+              background: Container(
+                color: Colors.redAccent,
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: const Icon(Icons.delete, color: Colors.white),
               ),
-            ),
-          ],
+              onDismissed: widget.editable
+                  ? (_) {
+                      _items.removeAt(idx);
+                      _notify();
+                    }
+                  : null,
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('${idx + 1}. $text'),
+                trailing: widget.editable
+                    ? Row(mainAxisSize: MainAxisSize.min, children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined),
+                          onPressed: () => _showEditDialog(current: text, index: idx),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () {
+                            setState(() {
+                              _items.removeAt(idx);
+                            });
+                            _notify();
+                          },
+                        ),
+                      ])
+                    : null,
+              ),
+            );
+          },
         ),
-      ),
-    ),
-  );
-}
-
-Widget buildSignatureSection(
-  Map<String, dynamic> extractedFields,
-  File? signatureFile,
-  Uint8List? signatureBytes,
-  bool isImage,
-  VoidCallback onPickSignature,
-  VoidCallback onClearSignature,
-  void Function(BuildContext) showFullImageViewer,
-) {
-  return buildSectionCard('13. Tanda Tangan & Administrasi Data', [
-    buildInfoRow(
-      'Perawat Pengassesmen',
-      extractedFields['perawat_pengassesmen']?.toString(),
-    ),
-    buildInfoRow(
-      'Lokasi Asesmen',
-      extractedFields['lokasi_asesmen']?.toString(),
-    ),
-    buildInfoRow(
-      'Tanggal/Waktu Asesmen',
-      extractedFields['tanggal_asesmen']?.toString(),
-    ),
-    const Divider(),
-    // Data TTD aktual tidak ada di JSON, hanya nama perawat dari root
-    Text(
-      'Status Tanda Tangan (Simulasi UI):',
-      style: TextStyle(color: _colors.headingBlue, fontWeight: FontWeight.w600),
-    ),
-    const SizedBox(height: 6),
-    if (signatureFile != null || signatureBytes != null) ...[
-      // Menampilkan placeholder gambar TTD (perlu implementasi lebih lanjut)
-      Text(
-        'Tanda tangan sudah ada (File: ${signatureFile?.path.split('/').last ?? 'Bytes'})',
-      ),
-      const SizedBox(height: 8),
-      _buildSignatureActions(onClearSignature, onPickSignature),
-    ] else ...[
-      _buildSignaturePlaceholder(onPickSignature),
-    ],
-  ]);
+        const SizedBox(height: 8),
+        if (widget.editable)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.add),
+              label: const Text('Tambah Rencana'),
+              onPressed: () => _showEditDialog(),
+            ),
+          ),
+      ],
+    );
+  }
 }

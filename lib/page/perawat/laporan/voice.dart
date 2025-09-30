@@ -1,24 +1,21 @@
 import 'dart:async';
-import 'dart:convert'; // ✨ NEW: For decoding JSON
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart'; // ✨ NEW
-import 'package:http/http.dart' as http; // ✨ NEW
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // ✨ NEW
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vocare/common/type.dart';
 import 'package:vocare/page/perawat/laporan/review.dart';
 
 enum VoiceState { initial, listening, processing }
-
-// ✨ NEW: Add a state for data fetching
 enum DataState { loading, loaded, error }
 
-// Top-level cache constants
 const String _kCacheKey = 'vocare_questions_cache_v1';
 const String _kCacheTsKey = 'vocare_questions_cache_ts_v1';
-const Duration _kCacheTTL = Duration(hours: 24); // TTL: bisa diubah sesuai kebutuhan
+const Duration _kCacheTTL = Duration(hours: 24);
 
 class VoicePageLaporan extends StatefulWidget {
   const VoicePageLaporan({super.key, required this.user});
@@ -58,7 +55,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
 
   String _activeQuestionSet = 'pasien';
 
-  // ✨ NEW: Define the initial hardcoded questions
   final List<String> _initialQuestions = const [
     "Siapa nama lengkap pasien?",
     "Berapa nomor rekam medis pasien?",
@@ -80,11 +76,13 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     "Apa sumber data anamnesa yang digunakan?",
   ];
 
-  // ✨ NEW: showInitialQuestions controls whether the initial list is shown
   bool _showInitialQuestions = true;
-
-  // ✨ NEW: Flag to allow a short grace period after stop so final result arrives
   bool _awaitingFinalization = false;
+
+  // --- MULTI-SESSION CONFIG ---
+  final int _totalSessions = 3; // ubah sesuai kebutuhan
+  int _currentSessionIndex = 0; // 0-based index
+  final List<String> _sessionTranscripts = [];
 
   void safeSetState(VoidCallback fn) {
     if (!mounted) return;
@@ -96,7 +94,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 600),
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -105,9 +103,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     });
   }
 
-  // -------------------------
-  // SharedPreferences cache helpers
-  // -------------------------
   Future<Map<String, dynamic>?> _loadCachedQuestions() async {
     try {
       final sp = await SharedPreferences.getInstance();
@@ -142,9 +137,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     await sp.remove(_kCacheTsKey);
   }
 
-  // -------------------------
-  // Network refresh (background-capable)
-  // -------------------------
   Future<void> _refreshQuestionsFromNetwork({bool showErrors = false}) async {
     try {
       final apiUrl = dotenv.env['API_URL'];
@@ -157,10 +149,8 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
         final decodedData = json.decode(response.body);
         final data = decodedData['data'] as Map<String, dynamic>? ?? {};
 
-        // simpan cache
         await _saveCachedQuestions(data);
 
-        // update UI hanya bila ada perbedaan atau saat awal belum ada data
         final List<String> pQuestions = List<String>.from(
           (data['pasien']?[0]?['list_pertanyaan']) ?? [],
         );
@@ -191,7 +181,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     }
   }
 
-  // --- Ganti _fetchQuestions dengan versi cache-aware ---
   Future<void> _fetchQuestions() async {
     safeSetState(() {
       _dataState = DataState.loading;
@@ -199,14 +188,12 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     });
 
     try {
-      // 1) Coba load cache
       final cached = await _loadCachedQuestions();
       final ts = await _getCacheTimestamp();
       final cacheAge =
           DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(ts));
 
       if (cached != null) {
-        // Terdapat cache — tampilkan segera
         final List<String> pQuestions = List<String>.from(
           (cached['pasien']?[0]?['list_pertanyaan']) ?? [],
         );
@@ -220,19 +207,15 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
           _dataState = DataState.loaded;
         });
 
-        // Jika cache masih fresh: jalankan refresh di background tapi jangan ganggu UI
         if (cacheAge < _kCacheTTL) {
-          // background refresh (tidak menampilkan error ke user)
           _refreshQuestionsFromNetwork();
           return;
         } else {
-          // cache expired — tampilkan cache terlebih dulu, lalu refresh di background
           _refreshQuestionsFromNetwork();
           return;
         }
       }
 
-      // 2) Tidak ada cache — ambil dari network (tunggu sampai selesai)
       final apiUrl = dotenv.env['API_URL'];
       if (apiUrl == null) throw Exception('API_URL not found in .env file');
 
@@ -249,7 +232,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
           (data['perawat']?[0]?['list_pertanyaan']) ?? [],
         );
 
-        // simpan cache
         await _saveCachedQuestions(data);
 
         safeSetState(() {
@@ -263,14 +245,12 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
       }
     } catch (e) {
       debugPrint('Error fetching questions: $e');
-      // Jika ada cache sebelumnya, biarkan tetap tampil; kalau gak ada, tampilkan error
       if (!mounted) return;
       final cached = await _loadCachedQuestions();
       if (cached != null) {
-        // sudah ditampilkan lebih dulu; cukup log saja
         safeSetState(() {
           _errorMessage = e.toString();
-          _dataState = DataState.loaded; // keep showing cached data
+          _dataState = DataState.loaded;
         });
       } else {
         safeSetState(() {
@@ -386,10 +366,9 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
               _animController.stop();
             } catch (_) {}
 
-            // 🔁 Auto-restart jika sesi logis masih aktif dan bukan karena user stop
             if (_autoRestartEnabled &&
                 wasListening &&
-                _isSessionActive && // ✅ KUNCI: hanya jika sesi logis aktif
+                _isSessionActive &&
                 !_navigatedForSession &&
                 _speechEnabled &&
                 !_reinitInProgress) {
@@ -421,7 +400,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
               }
             }
 
-            // Hanya kembalikan ke initial jika sesi logis TIDAK aktif
             safeSetState(() {
               if (_state != VoiceState.processing && !_isSessionActive) {
                 _state = VoiceState.initial;
@@ -471,7 +449,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
             return;
           }
 
-          // Hanya hentikan jika sesi TIDAK aktif
           if (!_isSessionActive) {
             try {
               await _speech.stop();
@@ -610,17 +587,17 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
   }
 
   Future<void> _startListeningSession() async {
-    if (!_speechEnabled || !_isSessionActive) return; // ✅ tambahan guard
+    if (!_speechEnabled || !_isSessionActive) return;
     _session++;
     final int localSession = _session;
 
-    debugPrint('Memulai listening session: $localSession');
+    debugPrint('Memulai listening session: $localSession (logical index: $_currentSessionIndex)');
 
     safeSetState(() {
       _isListening = true;
       _state = VoiceState.listening;
       _statusText = 'listening';
-      _awaitingFinalization = false; // reset
+      _awaitingFinalization = false;
     });
 
     _lastPartial = '';
@@ -656,9 +633,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
           }
         },
         localeId: _chosenLocale,
-        // ✨ LONG durations to allow long dictation (keperluan pasien panjang)
         listenFor: const Duration(hours: 2),
-        // pauseFor determines how long silence is tolerated before auto-stop
         pauseFor: const Duration(minutes: 2),
         partialResults: true,
         cancelOnError: false,
@@ -699,14 +674,15 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     }
 
     if (!_isListening) {
-      // 🔑 START SESI LOGIS
       _isSessionActive = true;
       _lastPartial = '';
       _navigatedForSession = false;
       _reinitAttempts = 0;
+      if (_currentSessionIndex == 0 && _sessionTranscripts.isEmpty) {
+        _sessionTranscripts.clear();
+      }
       await _startListeningSession();
     } else {
-      // 🔑 STOP SESI LOGIS
       _isSessionActive = false;
       _session++;
       _navigatedForSession = true;
@@ -715,7 +691,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
         _isListening = false;
         _state = VoiceState.processing;
         _statusText = 'processing';
-        _awaitingFinalization = true; // allow grace period for final result
+        _awaitingFinalization = true; 
       });
 
       try {
@@ -726,7 +702,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
         await _speech.stop();
       } catch (e) {
         debugPrint('Error saat stop(): $e');
-        // If stop fails, try cancel as fallback
         try {
           await _speech.cancel();
         } catch (_) {}
@@ -734,11 +709,8 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
 
       _cancelRestartTimer();
 
-      // ✨ NEW: Give a short grace period (up to 900ms) so the engine can deliver a final result
-      // In many cases the finalResult callback arrives a few hundred ms after stop().
-      await Future.delayed(const Duration(milliseconds: 700));
+      await Future.delayed(const Duration(milliseconds: 500));
 
-      // capture all text available (fullBuffer + any last partial)
       final captured = (_fullBuffer + ' ' + _lastPartial).trim();
       final finalMerged = _mergeWithOverlap('', captured);
 
@@ -750,16 +722,113 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
       final toShow = finalMerged.isNotEmpty
           ? finalMerged
           : 'Tidak ada teks yang dikenali.';
-      if (!mounted) return;
-      _navigateToReview(toShow);
 
-      safeSetState(() {
-        _state = VoiceState.initial;
-        _statusText = 'ready';
-        _text = '';
-        _isListening = false;
-      });
+      if (!mounted) return;
+
+      if (_totalSessions > 1) {
+        _handleSessionFinal(toShow);
+      } else {
+        _navigateToReview(toShow);
+        safeSetState(() {
+          _state = VoiceState.initial;
+          _statusText = 'ready';
+          _text = '';
+          _isListening = false;
+        });
+      }
     }
+  }
+
+  Future<void> _handleSessionFinal(String transcript) async {
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        final bool isLast = _currentSessionIndex >= (_totalSessions - 1);
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          title: Text('Hasil Transkrip Sesi ${_currentSessionIndex + 1} / $_totalSessions'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: SelectableText(transcript),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                safeSetState(() {
+                  _state = VoiceState.initial;
+                  _statusText = 'ready';
+                  _text = '';
+                });
+                Future.delayed(const Duration(milliseconds: 200)).then((_) async {
+                  if (!mounted) return;
+                  _lastPartial = '';
+                  _fullBuffer = '';
+                  _isSessionActive = true;
+                  try {
+                    await _startListeningSession();
+                  } catch (e) {
+                    debugPrint('Gagal memulai ulang sesi: $e');
+                  }
+                });
+              },
+              child: const Text('Rekam Ulang'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                // simpan
+                if (_sessionTranscripts.length > _currentSessionIndex) {
+                  _sessionTranscripts[_currentSessionIndex] = transcript;
+                } else {
+                  _sessionTranscripts.add(transcript);
+                }
+
+                final bool wasLast = _currentSessionIndex >= (_totalSessions - 1);
+                if (wasLast) {
+                  String combined = '';
+                  for (final t in _sessionTranscripts) {
+                    combined = _mergeWithOverlap(combined, t);
+                  }
+                  _navigateToReview(combined);
+                  safeSetState(() {
+                    _state = VoiceState.initial;
+                    _statusText = 'ready';
+                    _text = '';
+                    _isListening = false;
+                    _currentSessionIndex = 0;
+                    _sessionTranscripts.clear();
+                  });
+                } else {
+                  safeSetState(() {
+                    _currentSessionIndex++;
+                    _state = VoiceState.initial;
+                    _statusText = 'ready';
+                    _text = '';
+                  });
+                  Future.delayed(const Duration(milliseconds: 300)).then((_) async {
+                    if (!mounted) return;
+                    _lastPartial = '';
+                    _fullBuffer = '';
+                    _isSessionActive = true;
+                    try {
+                      await _startListeningSession();
+                    } catch (e) {
+                      debugPrint('Gagal mulai sesi berikutnya: $e');
+                    }
+                  });
+                }
+              },
+              child: Text(isLast ? 'Selesai & Gabungkan' : 'Simpan & Lanjut'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _navigateToReview(String reportText) {
@@ -861,7 +930,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                 'Pertanyaan Awal:',
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
               ),
-
               Expanded(
                 child: SingleChildScrollView(
                   child: Column(
@@ -981,7 +1049,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                     child: _buildToggleButton(
                       'Pertanyaan Awal',
                       active: _showInitialQuestions,
-                      isRight: false, 
+                      isRight: false,
                       onPressed: () {
                         safeSetState(() {
                           _showInitialQuestions = true;
@@ -996,7 +1064,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                       active: isShowingPerawat
                           ? _activeQuestionSet == 'pasien'
                           : _activeQuestionSet == 'perawat',
-                      isRight: true, 
+                      isRight: true,
                       onPressed: () {
                         safeSetState(() {
                           _activeQuestionSet = isShowingPerawat ? 'pasien' : 'perawat';
@@ -1015,6 +1083,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     return SizedBox(
       height: 400,
       child: Card(
+        color: Colors.white,
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: 3,
@@ -1097,7 +1166,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     );
     const primaryColor = Color(0xFF093275);
 
-
     final background = isRight ? primaryColor : Colors.white;
     final foreground = isRight ? Colors.white : primaryColor;
     final side = isRight
@@ -1157,6 +1225,12 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
               ),
             ),
             const SizedBox(height: 12),
+            // session counter (hanya jika multi-session)
+            if (_totalSessions > 1)
+              Text(
+                'Sesi ${_currentSessionIndex + 1} dari $_totalSessions',
+                style: const TextStyle(fontSize: 13, color: Colors.black54),
+              ),
           ],
         );
 

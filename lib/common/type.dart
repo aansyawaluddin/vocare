@@ -285,6 +285,50 @@ class CPPT {
   }
 }
 
+class Intervensi {
+  Intervensi({
+    required this.id,
+    required this.evaluasi,
+    required this.implementasi,
+    required this.patientId,
+    required this.tanggal,
+    required this.userId,
+  });
+  factory Intervensi.fromJson(Map<String, dynamic> json) {
+    int _i(Object? v) => v is int ? v : int.tryParse(v?.toString() ?? '0') ?? 0;
+    String _s(Object? v) => v?.toString() ?? '';
+    DateTime? _d(Object? v) =>
+        v == null ? null : DateTime.tryParse(v.toString());
+
+    return Intervensi(
+      id: _i(json['id']),
+      evaluasi: _s(json['evaluasi']),
+      implementasi: _s(json['implementasi']),
+      patientId: _i(json['patient_id']),
+      tanggal: _d(json['tanggal']),
+      userId: _i(json['user_id']),
+    );
+  }
+
+  final int id;
+  final String evaluasi;
+  final String implementasi;
+  final int patientId;
+  final DateTime? tanggal;
+  final int userId;
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'evaluasi': evaluasi,
+      'implementasi': implementasi,
+      'patient_id': patientId,
+      'tanggal': tanggal?.toIso8601String(),
+      'user_id': userId,
+    };
+  }
+}
+
+
 class Laporan {
   Laporan({
     required this.id,

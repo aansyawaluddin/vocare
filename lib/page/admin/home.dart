@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:vocare/common/type.dart';
+import 'package:vocare/page/admin/grafik.dart';
 import 'package:vocare/page/admin/inap.dart';
 import 'package:vocare/page/admin/jalan.dart';
 import 'package:vocare/page/login/login.dart';
 import 'package:vocare/widgets/admin/add_user.dart';
-import 'package:vocare/widgets/admin/pengguna.dart';
+import 'package:vocare/page/admin/pengguna.dart';
 import 'package:vocare/widgets/admin/file.dart';
 
 class HomeAdminPage extends StatefulWidget {
@@ -28,18 +29,12 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
 
     switch (_selectedTab) {
       case 0:
-        return Pengguna(
-          key: _penggunaWidgetKey,
-          navy: navy,
-          cardBlue: cardBlue,
-          isCompact: isCompact,
-        );
-
-      case 1:
+        // Menambahkan padding di bawah agar konten tidak tertutup oleh navigasi
         return SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 120.0),
           child: Column(
             children: const [
-              SizedBox(height: 8),
+              SizedBox(height: 12),
               UploadFileWidget(
                 apiPath: '/pdf/process-assesmen',
                 title: 'Upload Assessment',
@@ -54,15 +49,29 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                 apiPath: '/pdf/process-siki-slki-sdki',
                 title: 'Upload SIKI/SKLI/SDKI',
               ),
-              SizedBox(height: 16),
+              SizedBox(height: 24),
             ],
           ),
         );
 
+      case 1:
+        // PENTING: Anda juga perlu menambahkan padding di bagian bawah daftar
+        // di dalam widget `Pengguna` Anda, sama seperti yang dilakukan untuk tab 0.
+        // Contoh: Jika `Pengguna` menggunakan ListView, tambahkan `padding: const EdgeInsets.only(bottom: 120)`.
+        return Pengguna(
+          key: _penggunaWidgetKey,
+          navy: navy,
+          cardBlue: cardBlue,
+          isCompact: isCompact,
+        );
+
       case 2:
-        return PasienInapAdmin(user: widget.user);
+        return const PieChartDashboard();
 
       case 3:
+        return PasienInapAdmin(user: widget.user);
+
+      case 4:
         return PasienJalanAdmin(user: widget.user);
 
       default:
@@ -79,12 +88,12 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
     return Scaffold(
       backgroundColor: lightBackground,
       body: SafeArea(
+        bottom: false, 
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
-            final isCompact = width < 380;
 
-            // HEADER (sama tampilan seperti sebelumya)
+            // HEADER
             final header = Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
@@ -100,17 +109,17 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                   Row(
                     children: [
                       Container(
-                        width: isCompact ? 40 : 44,
-                        height: isCompact ? 40 : 44,
+                        width: 44,
+                        height: 20,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.06),
+    
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Center(
+                        child: const Center(
                           child: Icon(
                             Icons.health_and_safety,
                             color: Colors.white,
-                            size: isCompact ? 22 : 26,
+                            size: 26,
                           ),
                         ),
                       ),
@@ -132,7 +141,7 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                               'Welcome ${widget.user.username}',
                               style: TextStyle(
                                 color: Colors.white.withOpacity(0.95),
-                                fontSize: isCompact ? 13 : 14,
+                                fontSize: 14,
                               ),
                             ),
                           ],
@@ -163,24 +172,20 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                                   ),
                                 ),
                                 onTap: () {
-                                  // jalankan setelah menu menutup
                                   Future.microtask(() async {
                                     try {
-                                      final storage =
-                                          const FlutterSecureStorage();
+                                      const storage = FlutterSecureStorage();
                                       await storage.delete(key: 'access_token');
                                       await storage.delete(key: 'user');
-                                    } catch (e) {
-                                      // optional: handle error, mis. debug print
+                                    } catch (e) {}
+                                    if (mounted) {
+                                      Navigator.pushAndRemoveUntil(
+                                        context,
+                                        MaterialPageRoute(
+                                            builder: (_) => const Login()),
+                                        (route) => false,
+                                      );
                                     }
-                                    // navigasi dan bersihkan back stack supaya user tidak bisa kembali
-                                    Navigator.pushAndRemoveUntil(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const Login(),
-                                      ),
-                                      (route) => false,
-                                    );
                                   });
                                 },
                               ),
@@ -199,120 +204,6 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => setState(() => _selectedTab = 0),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: _selectedTab == 0
-                                    ? Colors.white
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(26),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'Pengguna',
-                                  style: TextStyle(
-                                    color: _selectedTab == 0
-                                        ? navy
-                                        : Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => setState(() => _selectedTab = 1),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: _selectedTab == 1
-                                    ? Colors.white
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(26),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'Assessment',
-                                  style: TextStyle(
-                                    color: _selectedTab == 1
-                                        ? navy
-                                        : Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => setState(() => _selectedTab = 2),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                // PERBAIKAN: cek untuk tab ke-2 (index 2), bukan 1
-                                color: _selectedTab == 2
-                                    ? Colors.white
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(26),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'Pasien Inap',
-                                  style: TextStyle(
-                                    color: _selectedTab == 2
-                                        ? navy
-                                        : Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => setState(() => _selectedTab = 3),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                // PERBAIKAN: cek untuk tab ke-2 (index 2), bukan 1
-                                color: _selectedTab == 3
-                                    ? Colors.white
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(26),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'Pasien Jalan',
-                                  style: TextStyle(
-                                    color: _selectedTab == 3
-                                        ? navy
-                                        : Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
             );
@@ -327,63 +218,106 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                 header,
                 const SizedBox(height: 18),
                 Expanded(child: content),
-                const SizedBox(height: 24),
               ],
             );
           },
         ),
       ),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+        child: Container(
+          height: 72,
+          decoration: BoxDecoration(
+            color: navy,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.12),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4)),
+            ],
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _navItem(icon: Icons.upload_file, index: 0),
+                  _navItem(icon: Icons.person_outline, index: 1),
+                  _navItem(icon: Icons.pie_chart_outline, index: 2),
+                  _navItem(icon: Icons.king_bed_outlined, index: 3),
+                  _navItem(icon: Icons.directions_walk, index: 4),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButton: _selectedTab == 1
+          ? Padding(
+              // Padding disesuaikan agar posisi tombol lebih baik
+              padding: const EdgeInsets.only(bottom: 96.0),
+              child: SizedBox(
+                height: 56,
+                width: MediaQuery.of(context).size.width - 72,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    final created = await AddUserDialog.show(
+                      context: context,
+                      isCompact: MediaQuery.of(context).size.width < 380,
+                      navy: navy,
+                      cardBlue: cardBlue,
+                    );
 
-      bottomNavigationBar: _selectedTab == 0
-          ? SafeArea(
-              minimum: const EdgeInsets.fromLTRB(24, 8, 24, 18),
-              child: Padding(
-                padding: const EdgeInsets.only(top: 6.0),
-                child: SizedBox(
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      final created = await AddUserDialog.show(
-                        context: context,
-                        isCompact: MediaQuery.of(context).size.width < 380,
-                        navy: navy,
-                        cardBlue: cardBlue,
-                      );
-
-                      // jika dialog successful mengembalikan true, recreate Pengguna
-                      if (created == true) {
-                        setState(() {
-                          _penggunaWidgetKey = UniqueKey();
-                        });
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: navy,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 8,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.add, color: Colors.white, size: 22),
-                        SizedBox(width: 10),
-                        Text(
-                          'Tambah Pengguna',
+                    if (created == true) {
+                      setState(() {
+                        _penggunaWidgetKey = UniqueKey();
+                      });
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: navy,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    elevation: 8,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.add, color: Colors.white, size: 22),
+                      SizedBox(width: 10),
+                      Text('Tambah Pengguna',
                           style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700)),
+                    ],
                   ),
                 ),
               ),
             )
           : null,
+    );
+  }
+
+  Widget _navItem({required IconData icon, required int index}) {
+    final isSelected = _selectedTab == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedTab = index),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(height: 8),
+          Icon(
+            icon,
+            color: isSelected ? Colors.white : Colors.white70,
+            size: isSelected ? 26 : 22,
+          ),
+        ],
+      ),
     );
   }
 }

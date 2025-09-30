@@ -109,7 +109,7 @@ class _PasienInapAdminWidgetState extends State<PasienInapAdminWidget> {
       children: [
         const SizedBox(height: 8),
         Text(
-          'Pasien Rawat Jalan :',
+          'Pasien Rawat Inap :',
           style: TextStyle(
             color: navy,
             fontWeight: FontWeight.w700,
@@ -122,7 +122,7 @@ class _PasienInapAdminWidgetState extends State<PasienInapAdminWidget> {
             padding: const EdgeInsets.symmetric(vertical: 24.0),
             child: Center(
               child: Text(
-                'Tidak ada pasien di ruangan ini',
+                'Tidak ada pasien',
                 style: TextStyle(color: navy.withOpacity(0.8)),
               ),
             ),

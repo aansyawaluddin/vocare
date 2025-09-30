@@ -1,4 +1,3 @@
-// lib/page/perawat/laporan/report.dart (atau sesuai strukturmu)
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -39,8 +38,6 @@ class _VocareReportState extends State<VocareReport> {
     _controller.dispose();
     super.dispose();
   }
-
-  // Fungsi untuk melakukan POST ke server /assesments/ (sesuaikan dengan kebutuhan)
   Future<Map<String, dynamic>?> _postAssessment({
     required String perawat,
     required String query,
@@ -107,8 +104,6 @@ class _VocareReportState extends State<VocareReport> {
       );
 
       if (!mounted) return;
-
-      // Navigasi ke VocareReport2, pastikan token & username diteruskan
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -146,6 +141,8 @@ class _VocareReportState extends State<VocareReport> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
+      isDismissible: !_isLoading,
+      enableDrag: !_isLoading,
       builder: (context) {
         final sheetHeight = MediaQuery.of(context).size.height * 0.5;
         return Padding(
@@ -188,6 +185,7 @@ class _VocareReportState extends State<VocareReport> {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () {
+                        if (_isLoading) return;
                         Navigator.of(context).pop();
                       },
                       child: const Text('Batal'),
@@ -223,125 +221,149 @@ class _VocareReportState extends State<VocareReport> {
     const lightButtonBlue = Color(0xFF7FB0FF);
     const darkButtonBlue = Color(0xFF083B74);
 
-    return Scaffold(
-      backgroundColor: background,
-      appBar: AppBar(
-        titleSpacing: 60,
-        title: const Text(
-          'Vocare Report',
-          style: TextStyle(fontSize: 20, color: Color(0xFF093275)),
+    return WillPopScope(
+      onWillPop: () async {
+        if (_isLoading) return false;
+        return true;
+      },
+      child: Scaffold(
+        backgroundColor: background,
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          titleSpacing: 60,
+          title: const Text(
+            'Vocare Report',
+            style: TextStyle(fontSize: 20, color: Color(0xFF093275)),
+          ),
+          backgroundColor: const Color(0xFFD7E2FD),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Color(0xFF093275)),
+            onPressed: _isLoading ? null : () => Navigator.of(context).maybePop(),
+          ),
         ),
-        backgroundColor: const Color(0xFFD7E2FD),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Column(
-            children: [
-              const SizedBox(height: 10),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Container(
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: cardBorder),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Hasil Transkrip Voice:',
-                          style: TextStyle(
-                            color: headingBlue,
-                            fontWeight: FontWeight.w700,
+        body: Stack(
+          children: [
+            SafeArea(
+              child: AbsorbPointer(
+                absorbing: _isLoading,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 10),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Container(
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              border: Border.all(color: cardBorder),
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.03),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            padding: const EdgeInsets.all(18),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Hasil Transkrip Voice:',
+                                  style: TextStyle(
+                                    color: headingBlue,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  _currentText,
+                                  style: const TextStyle(height: 1.4, fontSize: 16),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          _currentText,
-                          style: const TextStyle(height: 1.4, fontSize: 16),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 56,
+                              child: ElevatedButton.icon(
+                                onPressed: _showEditSheet,
+                                icon: const Icon(Icons.edit, color: Colors.white),
+                                label: const Text(
+                                  'Edit',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: lightButtonBlue,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 0,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: SizedBox(
+                              height: 56,
+                              child: ElevatedButton(
+                                onPressed: _isLoading ? null : _submitAndNext,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: darkButtonBlue,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 0,
+                                ),
+                                child: const Text(
+                                  'Next',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 22),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            if (_isLoading)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black.withOpacity(0.25),
+                  child: const Center(
+                    child: SizedBox(
+                      height: 56,
+                      width: 56,
+                      child: CircularProgressIndicator(strokeWidth: 4.0),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 56,
-                      child: ElevatedButton.icon(
-                        onPressed: _showEditSheet,
-                        icon: const Icon(Icons.edit, color: Colors.white),
-                        label: const Text(
-                          'Edit',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: lightButtonBlue,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 0,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: SizedBox(
-                      height: 56,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _submitAndNext,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: darkButtonBlue,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 0,
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.0,
-                                ),
-                              )
-                            : const Text(
-                                'Next',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                  color: Colors.white,
-                                ),
-                              ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 22),
-            ],
-          ),
+          ],
         ),
       ),
     );

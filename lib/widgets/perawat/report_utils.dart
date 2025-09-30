@@ -1,7 +1,15 @@
+// assessment_detail_page.dart
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
+/// -------------------------
+/// Helper: Debug / Logging
+/// -------------------------
 void debugPrintFull(String? message, {int chunkSize = 1000}) {
   if (message == null) {
     debugPrint('null');
@@ -45,11 +53,35 @@ void logApiResponse(
   }
 }
 
+/// -------------------------
+/// Parsing / Normalizing JSON
+/// -------------------------
 String stripCodeFences(String s) {
   return s
       .replaceAll(RegExp(r'```json', multiLine: true), '')
       .replaceAll('```', '')
       .trim();
+}
+
+dynamic getCaseInsensitive(Map? map, String key) {
+  if (map == null) return null;
+
+  for (final entry in map.entries) {
+    if (entry.key.toString().toLowerCase() == key.toLowerCase()) {
+      return entry.value;
+    }
+  }
+  return null;
+}
+
+dynamic getFirstNonNull(Map? map, List<String> keys) {
+  if (map == null) return null;
+
+  for (final key in keys) {
+    final value = getCaseInsensitive(map, key);
+    if (value != null) return value;
+  }
+  return null;
 }
 
 Map<String, dynamic>? normalizeParsedMap(Map<String, dynamic> parsed) {
@@ -165,46 +197,17 @@ Map<String, dynamic>? extractAssessmentObject(
   return null;
 }
 
-dynamic getCaseInsensitive(Map? map, String key) {
-  if (map == null) return null;
-
-  for (final entry in map.entries) {
-    if (entry.key.toString().toLowerCase() == key.toLowerCase()) {
-      return entry.value;
+Map<String, dynamic> extractSubMap(
+  Map<String, dynamic> source,
+  List<String> keys,
+) {
+  for (final key in keys) {
+    final value = getCaseInsensitive(source, key);
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
     }
   }
-  return null;
-}
-
-dynamic getFirstNonNull(Map? map, List<String> keys) {
-  if (map == null) return null;
-
-  for (final key in keys) {
-    final value = getCaseInsensitive(map, key);
-    if (value != null) return value;
-  }
-  return null;
-}
-
-dynamic getNestedValue(Map? root, List<String> path) {
-  if (root == null || path.isEmpty) return null;
-
-  dynamic current = root;
-  for (int i = 0; i < path.length; i++) {
-    if (current is! Map) return null;
-
-    current = getCaseInsensitive(current, path[i]);
-    if (current == null) return null;
-  }
-
-  return current;
-}
-
-Map<String, String> parseMultipleInfo(String? rawText) {
-  if (rawText == null || rawText.trim().isEmpty) {
-    return {};
-  }
-  return {};
+  return <String, dynamic>{};
 }
 
 String cleanAndFormatText(String? text) {
@@ -220,19 +223,7 @@ String cleanAndFormatText(String? text) {
       .trim();
 }
 
-Map<String, dynamic> extractSubMap(
-  Map<String, dynamic> source,
-  List<String> keys,
-) {
-  for (final key in keys) {
-    final value = getCaseInsensitive(source, key);
-    if (value is Map) {
-      return Map<String, dynamic>.from(value);
-    }
-  }
-  return <String, dynamic>{};
-}
-
+/// Extract fields dari object asesmen (memakai fallback dan parsing rencana_asuhan)
 Map<String, dynamic> extractFieldsFromAssessment(
   Map<String, dynamic>? asesmen,
 ) {
@@ -266,21 +257,37 @@ Map<String, dynamic> extractFieldsFromAssessment(
   final skriningGizi = extractSubMap(asesmen, ['skrining_gizi']);
   final skriningJatuh = extractSubMap(asesmen, ['skrining_risiko_jatuh']);
   final psikososial = extractSubMap(asesmen, ['status_psikososial']);
-  final rencana = extractSubMap(asesmen, ['rencana_perawatan']);
+  final rencana = extractSubMap(asesmen, ['rencana_perawatan', 'rencana']);
   final masalah = extractSubMap(asesmen, ['masalah_keperawatan']);
   final administrasi = extractSubMap(asesmen, ['administrasi']);
+  final rencanaAsuhanRaw = getFirstNonNull(asesmen, [
+    'rencana_asuhan_keperawatan',
+  ]);
 
-  final pendampingRaw =
-      getFirstNonNull(kunjungan, ['pendamping']) ??
-      getFirstNonNull(informasiUmum, ['pendamping', 'nama_pendamping']);
+  // Normalize rencana_asuhan menjadi List<String>
+  List<String> rencanaAsuhanList = [];
+  if (rencanaAsuhanRaw is List) {
+    rencanaAsuhanList = rencanaAsuhanRaw
+        .map((e) => e?.toString() ?? '')
+        .where((s) => s.isNotEmpty)
+        .toList();
+  } else if (rencanaAsuhanRaw is String && rencanaAsuhanRaw.trim().isNotEmpty) {
+    rencanaAsuhanList = rencanaAsuhanRaw
+        .split(RegExp(r'\r?\n|;|,|-'))
+        .map((e) => e.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+  } else {
+    // fallback: kosong
+    rencanaAsuhanList = <String>[];
+  }
 
   return buildExtractedFieldsMap(
     asesmen: asesmen,
     informasiUmum: informasiUmum,
     kunjungan: kunjungan,
-    pendamping: {'raw': pendampingRaw},
     keluhanUtamaMap: extractSubMap(asesmen, ['keluhan_utama']),
-    riwayatMap: riwayatPenyakit, // Sekarang berisi pemeriksaan_sistem
+    riwayatMap: riwayatPenyakit,
     alergiMap: alergiMap,
     statusGeneral: tandaVital,
     statusKesadaran: statusUmum,
@@ -292,6 +299,7 @@ Map<String, dynamic> extractFieldsFromAssessment(
     rencana: rencana,
     masalah: masalah,
     ttd: administrasi,
+    rencana_asuhan: rencanaAsuhanList,
   );
 }
 
@@ -299,15 +307,12 @@ Map<String, dynamic> buildExtractedFieldsMap({
   required Map<String, dynamic> asesmen,
   required Map<String, dynamic> informasiUmum,
   required Map<String, dynamic> kunjungan,
-  required Map<String, dynamic> pendamping,
   required Map<String, dynamic> keluhanUtamaMap,
-  required Map<String, dynamic>
-  riwayatMap, // Ini sekarang adalah Pemeriksaan Sistem (riwayat_penyakit, nafsu_makan, dll)
+  required Map<String, dynamic> riwayatMap,
   required Map<String, dynamic> alergiMap,
-  required Map<String, dynamic> statusGeneral, // Tanda Vital
-  required Map<String, dynamic> statusKesadaran, // Status Umum & Kesadaran
-  required Map<String, dynamic>
-  pemeriksaanFisik, // Pemeriksaan Fisik (Per Sistem)
+  required Map<String, dynamic> statusGeneral,
+  required Map<String, dynamic> statusKesadaran,
+  required Map<String, dynamic> pemeriksaanFisik,
   required Map<String, dynamic> asesmenNyeri,
   required Map<String, dynamic> skriningGizi,
   required Map<String, dynamic> skriningJatuh,
@@ -315,30 +320,20 @@ Map<String, dynamic> buildExtractedFieldsMap({
   required Map<String, dynamic> rencana,
   required Map<String, dynamic> masalah,
   required Map<String, dynamic> ttd,
+  required dynamic rencana_asuhan,
 }) {
-  final pendampingRaw = pendamping['raw'];
-  final pendampingNama = pendampingRaw is String
-      ? pendampingRaw
-      : getFirstNonNull(pendamping, ['nama']);
-
-  // Logika gabungan alergi disederhanakan karena JSON hanya memiliki 'alergi' di root 'asesmen_awal_keperawatan'
   final alergiRaw =
       getFirstNonNull(asesmen, ['alergi']) ??
       getFirstNonNull(alergiMap, ['obat', 'makanan', 'alergi']);
   final String alergiCombined =
       cleanAndFormatText(alergiRaw?.toString()) ?? '-';
 
-  // Ekstraksi nested Kondisi Sosial (dari Status Psikososial)
   final kondisiSosialRaw = getCaseInsensitive(psikososial, 'kondisi_sosial');
   final Map<String, dynamic> kondisiSosial =
       kondisiSosialRaw is Map<String, dynamic> ? kondisiSosialRaw : {};
 
-  // Ekstraksi Pemeriksaan Fisik
   final pfKeys = {
-    'kepala': getFirstNonNull(pemeriksaanFisik, [
-      'kepala',
-      'kepala_dan_mata',
-    ]), // Gabung kepala dan mata
+    'kepala': getFirstNonNull(pemeriksaanFisik, ['kepala', 'kepala_dan_mata']),
     'mata': getFirstNonNull(pemeriksaanFisik, ['mata']),
     'tht': getFirstNonNull(pemeriksaanFisik, ['tht']),
     'mulut': getFirstNonNull(pemeriksaanFisik, ['mulut']),
@@ -355,8 +350,14 @@ Map<String, dynamic> buildExtractedFieldsMap({
   };
 
   return {
-    // 1. INFORMASI UMUM (Sesuai JSON)
-    'no_rm': getFirstNonNull(informasiUmum, ['nomor_rekam_medis', 'no_rm']),
+    // INFORMASI UMUM
+    'no_rm': getFirstNonNull(informasiUmum, [
+      'no_rekam_medis',
+      'no_rm',
+      'nomor_rekam_medis',
+      'nomor_identitas',
+      'no_identitas',
+    ]),
     'nama_pasien': getFirstNonNull(informasiUmum, [
       'nama_lengkap',
       'nama_pasien',
@@ -364,9 +365,6 @@ Map<String, dynamic> buildExtractedFieldsMap({
     ]),
     'jenis_kelamin': getFirstNonNull(informasiUmum, ['jenis_kelamin']),
     'tanggal_lahir': getFirstNonNull(informasiUmum, ['tanggal_lahir']),
-    'usia': getFirstNonNull(informasiUmum, [
-      'usia',
-    ]), // Tidak ada di JSON, biarkan null
     'alamat': getFirstNonNull(informasiUmum, ['alamat']),
     'pekerjaan': getFirstNonNull(informasiUmum, ['pekerjaan']),
     'status_perkawinan': getFirstNonNull(informasiUmum, ['status_perkawinan']),
@@ -377,41 +375,39 @@ Map<String, dynamic> buildExtractedFieldsMap({
     'kontak_penanggung_jawab': getFirstNonNull(informasiUmum, [
       'kontak_penanggung_jawab',
     ]),
-    'agama': getFirstNonNull(informasiUmum, ['agama']),
 
-    // 2. KUNJUNGAN (Sesuai JSON)
+    // KUNJUNGAN
     'tanggal_masuk': getFirstNonNull(kunjungan, [
       'tanggal_kunjungan',
       'tanggal_masuk',
       'tanggal',
     ]),
-    'jam_kunjungan': getFirstNonNull(kunjungan, [
+    'waktu_masuk': getFirstNonNull(kunjungan, [
       'jam_kunjungan',
       'jam_masuk',
-      'waktu',
+      'waktu_masuk',
+      'waktu_kunjungan',
     ]),
-    'poli': getFirstNonNull(kunjungan, ['tujuan_poli', 'poli']),
-    'kelas': getFirstNonNull(kunjungan, ['kelas_pelayanan', 'kelas']),
+    'poli': getFirstNonNull(kunjungan, [
+      'tujuan_poli',
+      'poli',
+      'poliklinik_tujuan',
+    ]),
+    'pelayanan': getFirstNonNull(kunjungan, [
+      'pelayanan',
+      'kelas',
+      'pelayanan_digunakan',
+      'kelas_pelayanan',
+    ]),
+    'pendamping': getFirstNonNull(kunjungan, ['pendamping']),
     'sumber_data': getFirstNonNull(kunjungan, [
       'sumber_data_anamnesa',
       'sumber_data',
     ]),
-    'rujukan': getFirstNonNull(kunjungan, ['rujukan']),
+    'rujukan': getFirstNonNull(kunjungan, ['rujukan', 'asal_rujukan']),
     'cara_masuk': getFirstNonNull(kunjungan, ['cara_masuk']),
-    'pendamping_raw': pendampingRaw,
 
-    // PENDAMPING (mapping dari data_kunjungan/informasi_umum)
-    'pendamping': {
-      'raw': pendampingRaw,
-      'nama': pendampingNama,
-      'hubungan': getFirstNonNull(informasiUmum, [
-        'hubungan_penanggung_jawab',
-      ]), // Ambil dari PJ jika pendamping sama
-      'usia': getFirstNonNull(kunjungan, ['usia_pendamping']),
-      'kondisi': getFirstNonNull(kunjungan, ['kondisi_pendamping']),
-    },
-
-    // 3. KELUHAN UTAMA (Sesuai JSON)
+    // KELUHAN UTAMA
     'keluhan_utama':
         getFirstNonNull(asesmen, ['keluhan_utama']) ??
         getFirstNonNull(keluhanUtamaMap, ['keluhan']),
@@ -420,44 +416,33 @@ Map<String, dynamic> buildExtractedFieldsMap({
       'lama_keluhan',
     ]),
 
-    // 4. RIWAYAT & SISTEM (Sesuai JSON riwayat_penyakit & pemeriksaan_sistem)
-    // riwayatMap sekarang adalah 'pemeriksaan_sistem'
+    // RIWAYAT & SISTEM
     'riwayat_penyakit_sekarang': cleanAndFormatText(
       getFirstNonNull(riwayatMap, ['riwayat_penyakit'])?.toString(),
-    ), // Hanya ada 1 field riwayat_penyakit di JSON
+    ),
     'riwayat_penyakit_dahulu': cleanAndFormatText(
       getFirstNonNull(riwayatMap, ['riwayat_penyakit'])?.toString(),
-    ), // Gunakan riwayat_penyakit yang sama
+    ),
     'riwayat_operasi': cleanAndFormatText(
       getFirstNonNull(riwayatMap, ['riwayat_operasi'])?.toString(),
     ),
     'riwayat_transfusi': cleanAndFormatText(
-      getFirstNonNull(riwayatMap, ['riwayat_transfusi_darah'])?.toString(),
+      getFirstNonNull(riwayatMap, [
+        'riwayat_transfusi_darah',
+        'riwayat_transfusi',
+      ])?.toString(),
     ),
     'golongan_darah': getFirstNonNull(riwayatMap, ['golongan_darah']),
-
-    // Field baru dari Pemeriksaan Sistem
     'nafsu_makan': getFirstNonNull(riwayatMap, ['nafsu_makan'])?.toString(),
     'perubahan_berat_badan': getFirstNonNull(riwayatMap, [
       'perubahan_berat_badan',
     ])?.toString(),
 
-    // Alergi (gabungan obat & makanan)
+    // Alergi
     'alergi': alergiCombined,
-    'gelang_alergi': getFirstNonNull(alergiMap, [
-      'gelang_alergi',
-    ]), // Tidak ada di JSON
-    // 5. STATUS GENERAL & TANDA VITAL (Sesuai JSON)
-    // Tinggi/Berat Badan di Pemeriksaan Fisik
-    'tinggi_badan': getFirstNonNull(pemeriksaanFisik, [
-      'tinggi_badan,',
-      'tinggi_badan_cm',
-    ])?.toString(),
-    'berat_badan': getFirstNonNull(pemeriksaanFisik, [
-      'berat_badan',
-      'berat_badan_kg',
-    ])?.toString(),
+    'gelang_alergi': getFirstNonNull(alergiMap, ['gelang_alergi']),
 
+    // STATUS & TANDA VITAL
     'kesadaran': getFirstNonNull(pemeriksaanFisik, [
       'tingkat_kesadaran',
       'kesadaran',
@@ -467,8 +452,6 @@ Map<String, dynamic> buildExtractedFieldsMap({
       'keadaan_umum',
       'keadaan',
     ]),
-
-    // Tanda vital (sesuai field JSON contoh)
     'tekanan_darah': getFirstNonNull(statusGeneral, ['tekanan_darah', 'td']),
     'nadi': getFirstNonNull(statusGeneral, ['denyut_nadi', 'nadi']),
     'respirasi': getFirstNonNull(statusGeneral, [
@@ -477,7 +460,7 @@ Map<String, dynamic> buildExtractedFieldsMap({
     ]),
     'suhu': getFirstNonNull(statusGeneral, ['suhu_tubuh_c', 'suhu']),
 
-    // 6. PEMERIKSAAN FISIK (Sesuai JSON)
+    // PEMERIKSAAN FISIK
     'kepala': pfKeys['kepala'],
     'mata': pfKeys['mata'],
     'tht': pfKeys['tht'],
@@ -490,65 +473,58 @@ Map<String, dynamic> buildExtractedFieldsMap({
     'ekstremitas': pfKeys['ekstremitas'],
     'kulit': pfKeys['kulit'],
 
-    // 7. ASESMEN NYERI (mapping sesuai JSON)
-    'jenis_nyeri': getFirstNonNull(asesmenNyeri, [
-      'jenis',
-    ]), // Tidak ada di JSON
+    // ASESMEN NYERI
     'karakter_nyeri': getFirstNonNull(asesmenNyeri, ['sifat', 'karakter']),
     'lokasi_nyeri': getFirstNonNull(asesmenNyeri, ['lokasi']),
-    'penjalaran_nyeri': getFirstNonNull(asesmenNyeri, ['penjalaran']),
-    'skor': getFirstNonNull(asesmenNyeri, ['skala', 'intensitas', 'skor']),
-    'durasi_nyeri': getFirstNonNull(asesmenNyeri, [
-      'durasi',
-    ]), // Tidak ada di JSON
     'faktor_pencetus_nyeri': getFirstNonNull(asesmenNyeri, [
       'pemicu',
       'faktor_pemicu',
+      'pencetus',
     ]),
-    'faktor_pereda_nyeri': getFirstNonNull(asesmenNyeri, [
-      'penurun',
-      'faktor_pereda',
+    'faktor_penghilang_nyeri': getFirstNonNull(asesmenNyeri, [
+      'penghilang',
+      'faktor_penghilang',
     ]),
-    'rekomendasi_nyeri': getFirstNonNull(asesmenNyeri, [
-      'rekomendasi',
-    ]), // Tidak ada di JSON
-    // 8. SKRINING GIZI (Sesuai JSON)
+    'skala': getFirstNonNull(asesmenNyeri, ['skala_nyeri', 'skala']),
+
+    // SKRINING GIZI
+    'skor_gizi': getFirstNonNull(skriningGizi, ['skor', 'skor_gizi']),
+    'tinggi_badan': getFirstNonNull(skriningGizi, [
+      'tinggi_badan',
+      'tinggi_badan_cm',
+    ])?.toString(),
+    'berat_badan': getFirstNonNull(skriningGizi, [
+      'berat_badan',
+      'berat_badan_kg',
+    ])?.toString(),
+    'IMT': getFirstNonNull(skriningGizi, ['IMT'])?.toString(),
     'penurunan_berat_badan': getFirstNonNull(skriningGizi, [
       'penurunan_berat_badan',
-    ]), // Tidak ada di JSON
-    'asupan_makanan': getFirstNonNull(skriningGizi, [
-      'asupan_makanan',
-    ]), // Tidak ada di JSON
-    'mna_sf': getFirstNonNull(skriningGizi, ['skor', 'mna_sf']),
-    'lingkar_betis': getFirstNonNull(skriningGizi, [
-      'lingkar_betis',
-    ]), // Tidak ada di JSON
-    'kategori_gizi': getFirstNonNull(skriningGizi, ['kategori']),
+      'penurunan_berat',
+      'perubahan_berat',
+    ])?.toString(),
+    'status_gizi': getFirstNonNull(skriningGizi, ['status_gizi']),
 
-    // 9. SKRINING RISIKO JATUH (Sesuai JSON)
+    // SKRINING JATUH
     'skala_morse': getFirstNonNull(skriningJatuh, ['skor', 'skala_morse']),
     'riwayat_jatuh': getFirstNonNull(skriningJatuh, [
       'riwayat_jatuh_1_tahun',
       'riwayat_jatuh',
     ]),
-    'orientasi': getFirstNonNull(skriningJatuh, [
-      'orientasi',
-    ]), // Tidak ada di JSON
+    'orientasi': getFirstNonNull(skriningJatuh, ['orientasi']),
     'alat_bantu_jalan': getFirstNonNull(skriningJatuh, [
       'penggunaan_alat_bantu',
       'alat_bantu_jalan',
     ]),
-    'infus': getFirstNonNull(skriningJatuh, [
-      'terpasang_infus',
-      'infus',
-    ]), // Tidak ada di JSON
+    'infus': getFirstNonNull(skriningJatuh, ['terpasang_infus', 'infus']),
     'kategori_jatuh': getFirstNonNull(skriningJatuh, ['kategori']),
 
-    // 10. STATUS PSIKOSOSIAL (Sesuai JSON)
-    'komposisi_keluarga': getFirstNonNull(psikososial, [
-      'komposisi_keluarga',
-    ]), // Tidak ada di JSON
-    'bahasa_sehari_hari': getFirstNonNull(psikososial, ['bahasa_sehari_hari']),
+    // PSIKOSOSIAL
+    'komposisi_keluarga': getFirstNonNull(psikososial, ['komposisi_keluarga']),
+    'bahasa_sehari_hari': getFirstNonNull(psikososial, [
+      'bahasa_sehari_hari',
+      'bahasa',
+    ]),
     'komunikasi': getFirstNonNull(psikososial, [
       'status_komunikasi',
       'komunikasi',
@@ -557,17 +533,11 @@ Map<String, dynamic> buildExtractedFieldsMap({
       'status_emosional',
       'kondisi_emosional',
     ]),
-    'dukungan_keluarga': getFirstNonNull(psikososial, [
-      'dukungan_keluarga',
-    ]), // Tidak ada di JSON
+    'dukungan_keluarga': getFirstNonNull(psikososial, ['dukungan_keluarga']),
     'riwayat_gangguan_jiwa': getFirstNonNull(psikososial, [
       'gangguan_jiwa',
       'riwayat_gangguan_jiwa',
     ]),
-    'agama': getFirstNonNull(psikososial, [
-      'spiritual',
-      'agama',
-    ]), // Tidak ada di JSON
     'kebutuhan_spiritual': getFirstNonNull(psikososial, [
       'kebutuhan_ibadah',
       'kebutuhan_spiritual',
@@ -576,23 +546,28 @@ Map<String, dynamic> buildExtractedFieldsMap({
       'ekonomi',
       'status_ekonomi',
     ]),
-    'pendidikan': getFirstNonNull(kondisiSosial, ['pendidikan', 'pendidikan']),
+    'pendidikan': getFirstNonNull(kondisiSosial, [
+      'kondisi_sosial',
+      'pendidikan',
+    ]),
     'pemahaman_perawatan': getFirstNonNull(psikososial, [
       'pemahaman_rencana_perawatan',
     ]),
 
-    // 11. RENCANA PERAWATAN (Sesuai JSON)
-    'observasi': getFirstNonNull(rencana, ['observasi']), // Tidak ada di JSON
-    'edukasi': getFirstNonNull(asesmen, ['edukasi']), // Ambil dari root
+    // RENCANA PERAWATAN
+    'observasi': getFirstNonNull(rencana, ['observasi']),
+    'edukasi': getFirstNonNull(asesmen, ['edukasi']),
     'home_care': getFirstNonNull(rencana, ['home_care']),
-    'rujukan': getFirstNonNull(rencana, ['rujukan']), // Gunakan rujukan tunggal
-    // 12. MASALAH KEPERAWATAN (Sesuai JSON)
+    'rujukan': getFirstNonNull(rencana, ['rujukan']),
+
+    // MASALAH KEPERAWATAN
     'masalah_keperawatan_list': getFirstNonNull(asesmen, [
       'masalah_keperawatan',
-    ]), // Ambil array dari root
-    'diagnosa_utama': getFirstNonNull(masalah, ['utama']), // Tidak ada di JSON
-    'risiko': getFirstNonNull(masalah, ['risiko']), // Tidak ada di JSON
-    // 13. TANDA TANGAN & ADMINISTRASI (Sesuai JSON)
+    ]),
+    'diagnosa_utama': getFirstNonNull(masalah, ['utama']),
+    'risiko': getFirstNonNull(masalah, ['risiko']),
+
+    // ADMINISTRASI
     'lokasi_asesmen':
         getFirstNonNull(ttd, ['lokasi_asesmen']) ??
         getFirstNonNull(asesmen, ['lokasi_asesmen']),
@@ -601,20 +576,19 @@ Map<String, dynamic> buildExtractedFieldsMap({
         getFirstNonNull(asesmen, ['tanggal_asesmen']),
     'perawat_pengassesmen':
         getFirstNonNull(ttd, ['perawat_asesmen']) ??
-        getFirstNonNull(asesmen, ['perawat']), // Ambil dari root
+        getFirstNonNull(asesmen, ['perawat']),
     'ttd_perawat': getFirstNonNull(ttd, ['ttd_perawat_asesmen']),
     'perawat_penanggung_jawab': getFirstNonNull(ttd, [
       'perawat_penanggung_jawab',
     ]),
     'ttd_dokter': getFirstNonNull(ttd, ['ttd_perawat_penanggung_jawab']),
-  };
-}
 
-dynamic getPendampingValue(dynamic pendamping, String key) {
-  if (pendamping is Map) {
-    return pendamping[key]?.toString();
-  } else if (pendamping is String && key == 'nama') {
-    return pendamping;
-  }
-  return null;
+    // RENCANA ASUHAN LIST (selalu tersedia sebagai List<String>)
+    'rencana_asuhan_list': (rencana_asuhan is List)
+        ? rencana_asuhan
+              .map((e) => e?.toString() ?? '')
+              .where((s) => s.isNotEmpty)
+              .toList()
+        : <String>[],
+  };
 }
