@@ -158,14 +158,13 @@ class _VocareReport3State extends State<VocareReport3> {
     }
   }
 
-  // PERBAIKAN: gunakan parameter `id` ketika membangun URL
   Future<void> _fetchIntervensi(int id) async {
     setState(() {
       _isLoadingIntervensi = true;
       _intervensiData = null; // clear previous while loading
     });
 
-    final url = '${_baseUrlFromEnv()}/intervensi/$id'; // <-- pakai id
+    final url = '${_baseUrlFromEnv()}/intervensi/$id';
 
     try {
       if (kDebugMode) debugPrint('GET $url');
@@ -267,7 +266,6 @@ class _VocareReport3State extends State<VocareReport3> {
   Future<void> _postLaporan() async {
     setState(() => _isPostingLaporan = true);
 
-    // tentukan id yang valid (jangan kirim 0)
     final int? cpptIdToSend = (widget.cpptId != 0)
         ? widget.cpptId
         : (_cpptData != null ? int.tryParse(_cpptData!['id']?.toString() ?? '') : null);
@@ -286,7 +284,6 @@ class _VocareReport3State extends State<VocareReport3> {
         ? widget.intervensiId
         : (_intervensiData != null ? int.tryParse(_intervensiData!['id']?.toString() ?? '') : null);
 
-    // debug
     if (kDebugMode) {
       debugPrint('Preparing POST laporan with: cpptId=$cpptIdToSend, patientId=$patientIdToSend, perawatId=$perawatIdToSend, intervensiId=$intervensiIdToSend');
     }
@@ -353,7 +350,6 @@ class _VocareReport3State extends State<VocareReport3> {
     }
   }
 
-  // New: delete cppt
   Future<void> _deleteCppt() async {
     if (widget.cpptId == 0) {
       _showErrorSnackBar('cppt_id tidak tersedia. Tidak dapat menghapus.');
@@ -722,39 +718,16 @@ class _VocareReport3State extends State<VocareReport3> {
           ),
         ),
 
-        // Overlay: block interactions and show centered loading indicator when busy
+        // PERUBAHAN DI SINI: Overlay loading yang lebih sederhana
         if (_isBusy) ...[
-          const ModalBarrier(
-            dismissible: false,
-            color: Colors.black45,
-          ),
-          Center(
-            child: Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.12),
-                    blurRadius: 12,
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  SizedBox(
-                    width: 56,
-                    height: 56,
-                    child: CircularProgressIndicator(strokeWidth: 4),
-                  ),
-                  SizedBox(height: 12),
-                  Text(
-                    'Memproses...',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ],
+          const ModalBarrier(dismissible: false, color: Colors.black45),
+          const Center(
+            child: SizedBox(
+              height: 64,
+              width: 64,
+              child: CircularProgressIndicator(
+                strokeWidth: 4,
+                color: Colors.white, // Opsi: agar lebih terlihat di background gelap
               ),
             ),
           ),

@@ -211,20 +211,8 @@ class _DaftarRiwayatPageState extends State<DaftarRiwayatPage> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return ListView.separated(
-        padding: const EdgeInsets.only(bottom: 18, top: 10),
-        itemBuilder: (context, index) => Container(
-          height: 120,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: cardBorder),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          margin: const EdgeInsets.symmetric(vertical: 8),
-        ),
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
-        itemCount: 5,
-      );
+      // PERUBAHAN DI SINI
+      return const Center(child: CircularProgressIndicator());
     }
     if (_error != null) {
       return Center(child: Text(_error!));

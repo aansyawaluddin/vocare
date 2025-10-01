@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:vocare/common/type.dart';
-import 'package:vocare/page/perawat/inap/Detail/intervensi_list.dart';
 import 'package:vocare/page/perawat/inap/detail/assesments.dart';
 import 'package:vocare/page/perawat/inap/detail/cppt_list.dart';
-import 'package:vocare/page/perawat/inap/detail/intervensi_list.dart';
+import 'package:vocare/page/perawat/inap/detail/intervensi_list.dart' as detailIntervensi;
 import 'package:vocare/page/perawat/inap/detail/riwayat_laporan.dart'; 
 import 'package:vocare/page/perawat/inap/voice.dart';
 
@@ -39,7 +38,7 @@ class PatientDetailPage extends StatelessWidget {
         backgroundColor: navyColor,
         iconTheme: IconThemeData(color: Colors.white),
       ),
-      // MODIFIED: `body` sekarang dibungkus dengan SingleChildScrollView agar bisa di-scroll
+      backgroundColor: Colors.white,
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -47,6 +46,7 @@ class PatientDetailPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Card(
+                color: Colors.white,
                 elevation: 4,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -126,7 +126,7 @@ class PatientDetailPage extends StatelessWidget {
                   if (patientId != 0) {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (context) => IntervensiListPage(
+                        builder: (context) => detailIntervensi.IntervensiListPage(
                           patientId: patientId,
                           patientName: nama,
                           user: user,
@@ -169,7 +169,8 @@ class PatientDetailPage extends StatelessWidget {
                 MaterialPageRoute(
                   builder: (context) => VoicePageLaporanTambahan(
                     user: user,
-                    patientId: nama,
+                    patientId: patientId.toString(),
+                    
                   ),
                 ),
               );

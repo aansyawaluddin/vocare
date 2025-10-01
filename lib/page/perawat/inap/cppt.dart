@@ -1,9 +1,11 @@
+// lib/page/perawat/inap/cppt.dart
+
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
-import 'package:vocare/page/perawat/inap/laporan.dart';
+import 'package:vocare/page/perawat/inap/intervensi.dart'; // Make sure this import is correct
 
 class CpptTambahan extends StatefulWidget {
   final int cpptId;
@@ -29,16 +31,17 @@ class _CpptTambahanState extends State<CpptTambahan> {
   static const background = Color.fromARGB(255, 223, 240, 255);
   static const cardBorder = Color(0xFFCED7E8);
   static const headingBlue = Color(0xFF0F4C81);
-  static const buttonSave = Color(0xFF009563);
-  static const buttonUpdate = Color(0xFF007BFF); // ADDED: Color for update button
+  // MODIFIED: Changed button color name for clarity
+  static const buttonIntervensi = Color(0xFF009563);
+  static const buttonUpdate = Color(0xFF007BFF);
 
   Map<String, dynamic>? _cpptData;
   bool _isLoading = false;
-  bool _isPostingLaporan = false;
+  // MODIFIED: Renamed state variable for clarity
+  bool _isPostingIntervensi = false;
   bool _isUpdating = false;
   String? _error;
 
-  // ADDED: Controllers for editable text fields
   late final TextEditingController _subjectiveController;
   late final TextEditingController _objectiveController;
   late final TextEditingController _assessmentController;
@@ -48,7 +51,6 @@ class _CpptTambahanState extends State<CpptTambahan> {
   @override
   void initState() {
     super.initState();
-    // ADDED: Initialize controllers
     _subjectiveController = TextEditingController();
     _objectiveController = TextEditingController();
     _assessmentController = TextEditingController();
@@ -110,7 +112,6 @@ class _CpptTambahanState extends State<CpptTambahan> {
         }
         setState(() {
           _cpptData = obj;
-          // MODIFIED: Populate controllers with fetched data
           _subjectiveController.text = _cpptData?['subjective']?.toString() ?? '';
           _objectiveController.text = _cpptData?['objective']?.toString() ?? '';
           _assessmentController.text = _cpptData?['assessment']?.toString() ?? '';
@@ -133,13 +134,14 @@ class _CpptTambahanState extends State<CpptTambahan> {
         _error = 'Gagal mengambil CPPT: $e';
       });
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  // ADDED: Function to handle PUT request for updating CPPT
   Future<void> _updateCppt() async {
     setState(() => _isUpdating = true);
 
@@ -192,49 +194,52 @@ class _CpptTambahanState extends State<CpptTambahan> {
     }
   }
 
-  Future<void> _postLaporan() async {
-    setState(() => _isPostingLaporan = true);
+  // --- NEW FUNCTION TO POST INTERVENTION ---
+  Future<void> _postIntervensi() async {
+    setState(() => _isPostingIntervensi = true);
 
-    final url = '${_baseUrlFromEnv()}/laporan/';
+    final url = '${_baseUrlFromEnv()}/intervensi/';
     final headers = _buildHeaders();
     final body = jsonEncode({
-      "cppt_id": widget.cpptId,
-      "patient_id": widget.patientId,
-      "perawat_id": widget.perawatId,
-      "query": widget.query,
+      'patient_id': widget.patientId,
+      'user_id': widget.perawatId, // Assuming perawatId is the user_id
+      'query': widget.query,
     });
 
     try {
       if (kDebugMode) debugPrint('POST $url -> $body');
-      final response = await http.post(
-        Uri.parse(url),
-        headers: headers,
-        body: body,
-      );
+      final response =
+          await http.post(Uri.parse(url), headers: headers, body: body);
 
       if (!mounted) return;
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final Map<String, dynamic> data = jsonDecode(response.body);
 
-        int? laporanId;
+        int? intervensiId;
         if (data.containsKey('id')) {
-          laporanId = int.tryParse(data['id'].toString());
+          intervensiId = int.tryParse(data['id'].toString());
         } else if (data.containsKey('data') &&
             data['data'] is Map &&
             data['data']['id'] != null) {
-          laporanId = int.tryParse(data['data']['id'].toString());
+          intervensiId = int.tryParse(data['data']['id'].toString());
         }
 
-        if (laporanId == null) {
-          throw Exception('Gagal mendapatkan ID Laporan dari response server.');
+        if (intervensiId == null) {
+          throw Exception('Gagal mendapatkan ID Intervensi dari server.');
         }
 
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) =>
-                LaporanTambahan(laporanId: laporanId!, token: widget.token),
+            builder: (context) => IntervensiInap(
+              intervensiId: intervensiId!,
+              token: widget.token ?? '',
+              patientId: widget.patientId,
+              perawatId: widget.perawatId,
+              query: widget.query,
+              cpptId: widget.cpptId,
+            ),
           ),
         );
       } else {
@@ -245,7 +250,7 @@ class _CpptTambahanState extends State<CpptTambahan> {
             msg = parsed['message'].toString();
         } catch (_) {}
         throw Exception(
-          'Gagal mengirim laporan (${response.statusCode}): $msg',
+          'Gagal mengirim intervensi (${response.statusCode}): $msg',
         );
       }
     } catch (e) {
@@ -256,10 +261,11 @@ class _CpptTambahanState extends State<CpptTambahan> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isPostingLaporan = false);
+        setState(() => _isPostingIntervensi = false);
       }
     }
   }
+
 
   Widget section(String title, {required Widget child}) {
     return Container(
@@ -289,17 +295,15 @@ class _CpptTambahanState extends State<CpptTambahan> {
           ),
           const SizedBox(height: 6),
           child,
-          // const SizedBox(height: 12), // Adjusted padding inside text form field
         ],
       ),
     );
   }
 
-  // ADDED: Helper widget for creating editable text fields
   Widget _buildEditableField(TextEditingController controller) {
     return TextFormField(
       controller: controller,
-      maxLines: null, // Allows for multiline input
+      maxLines: null,
       keyboardType: TextInputType.multiline,
       style: const TextStyle(height: 1.4, fontSize: 16),
       decoration: const InputDecoration(
@@ -310,9 +314,8 @@ class _CpptTambahanState extends State<CpptTambahan> {
     );
   }
 
-
   Widget _buildBody() {
-    if (widget.cpptId == 0) { // MODIFIED: Simplified check
+    if (widget.cpptId == 0) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(20.0),
@@ -386,7 +389,6 @@ class _CpptTambahanState extends State<CpptTambahan> {
             ),
           ),
           const SizedBox(height: 15),
-          // MODIFIED: Replaced Text with _buildEditableField
           section('Subjective', child: _buildEditableField(_subjectiveController)),
           const SizedBox(height: 10),
           section('Objective', child: _buildEditableField(_objectiveController)),
@@ -417,7 +419,6 @@ class _CpptTambahanState extends State<CpptTambahan> {
     );
   }
 
-  // ADDED: Helper for creating loading buttons
   Widget _buildLoadingButton(
       {required bool isLoading,
       required VoidCallback? onPressed,
@@ -462,8 +463,7 @@ class _CpptTambahanState extends State<CpptTambahan> {
 
   @override
   Widget build(BuildContext context) {
-    // Determine if any action is in progress
-    final bool isActionInProgress = _isLoading || _isPostingLaporan || _isUpdating;
+    final bool isActionInProgress = _isLoading || _isPostingIntervensi || _isUpdating;
 
     return Scaffold(
       backgroundColor: background,
@@ -476,7 +476,7 @@ class _CpptTambahanState extends State<CpptTambahan> {
         backgroundColor: const Color(0xFFD7E2FD),
       ),
       body: SafeArea(child: _buildBody()),
-      // MODIFIED: Updated bottom navigation bar to include both buttons
+      // --- MODIFIED: BOTTOM NAVIGATION BAR ---
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(20, 8, 20, 18),
         child: Padding(
@@ -495,11 +495,14 @@ class _CpptTambahanState extends State<CpptTambahan> {
               const SizedBox(width: 12),
               Expanded(
                 child: _buildLoadingButton(
-                  isLoading: _isPostingLaporan,
-                  onPressed: isActionInProgress ? null : _postLaporan,
-                  text: 'Buat Laporan',
+                  // Use the new state variable
+                  isLoading: _isPostingIntervensi,
+                  // Call the new function
+                  onPressed: isActionInProgress ? null : _postIntervensi,
+                  // Updated button text
+                  text: 'Buat Intervensi',
                   loadingText: 'Mengirim...',
-                  color: buttonSave,
+                  color: buttonIntervensi,
                 ),
               ),
             ],

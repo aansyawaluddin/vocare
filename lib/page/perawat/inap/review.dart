@@ -1,3 +1,5 @@
+// lib/page/perawat/inap/review_tambahan.dart
+
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -5,6 +7,7 @@ import 'package:vocare/common/type.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:vocare/page/perawat/inap/cppt.dart';
+import 'package:vocare/page/perawat/inap/intervensi.dart';
 
 class ReviewTambahan extends StatefulWidget {
   final User user;
@@ -40,22 +43,31 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
     super.dispose();
   }
 
-  Future<void> _submitAndNext() async {
-    setState(() {
-      _isLoading = true;
-    });
+  String _getBaseUrl() {
+    return dotenv.env['API_URL'] ?? dotenv.env['API_BASE_URL'] ?? '';
+  }
+
+  Future<void> _submitCppt() async {
+    setState(() => _isLoading = true);
 
     try {
-      final base = dotenv.env['API_URL'] ?? dotenv.env['API_BASE_URL'] ?? '';
-      if (base.isEmpty) {
-        throw Exception('NO_API');
-      }
+      final base = _getBaseUrl();
+      if (base.isEmpty) throw Exception('NO_API');
       final apiUrl = base.endsWith('/') ? '${base}cppt/' : '$base/cppt/';
-
-      final perawatId = (widget.user.id.isNotEmpty)
-          ? widget.user.id
-          : widget.user.username;
       final token = widget.user.token ?? '';
+
+      final body = jsonEncode({
+        'patient_id': widget.patientId,
+        'perawat_id': widget.user.id,
+        'query': _currentText,
+      });
+
+      if (kDebugMode) {
+        debugPrint('--- [MENGIRIM POST KE CPPT] ---');
+        debugPrint('URL    : POST $apiUrl');
+        debugPrint('BODY   : $body');
+        debugPrint('---------------------------------');
+      }
 
       final response = await http.post(
         Uri.parse(apiUrl),
@@ -63,43 +75,35 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
           'Content-Type': 'application/json',
           if (token.isNotEmpty) 'Authorization': 'Bearer $token',
         },
-        body: jsonEncode({
-          'patient_id': widget.patientId,
-          'perawat_id': perawatId,
-          'query': _currentText,
-        }),
+        body: body,
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         if (!mounted) return;
 
         final responseBody = jsonDecode(response.body);
-        // Coba ambil cpptId dari beberapa kemungkinan struktur respons
         int cpptId = 0;
         if (responseBody is Map) {
-          if (responseBody['id'] != null) {
-            cpptId = int.tryParse(responseBody['id'].toString()) ?? 0;
-          } else if (responseBody['cppt_id'] != null) {
-            cpptId = int.tryParse(responseBody['cppt_id'].toString()) ?? 0;
-          } else if (responseBody['data'] is Map &&
-              responseBody['data']['id'] != null) {
-            cpptId =
-                int.tryParse(responseBody['data']['id'].toString()) ?? 0;
-          }
+          cpptId =
+              int.tryParse(
+                    (responseBody['id'] ??
+                                responseBody['cppt_id'] ??
+                                responseBody['data']?['id'])
+                            ?.toString() ??
+                        '0',
+                  ) ??
+                  0;
         }
 
-        if (kDebugMode) {
-          debugPrint('Laporan berhasil dikirim dengan CPPT ID: $cpptId');
-        }
+        debugPrint('Laporan CPPT berhasil dikirim dengan CPPT ID: $cpptId');
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Laporan berhasil disimpan!'),
+            content: Text('Laporan CPPT berhasil disimpan!'),
             backgroundColor: Colors.green,
           ),
         );
 
-        // Navigasi ke halaman berikutnya, kirim token yang sudah diekstrak
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -107,51 +111,178 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
               cpptId: cpptId,
               token: token,
               patientId: widget.patientId,
-              perawatId: perawatId,
+              perawatId: widget.user.id,
               query: _currentText,
             ),
           ),
         );
-      } else if (response.statusCode == 401) {
+      } else {
+        _handleErrorResponse(response);
+      }
+    } catch (e) {
+      _handleGenericError(e);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // --- NEW: FUNCTION TO GET THE LATEST CPPT ID ---
+  Future<int?> _getLatestCpptId(String token) async {
+    final base = _getBaseUrl();
+    if (base.isEmpty) throw Exception('API URL not found');
+    final url = Uri.parse('$base/cppt?patient_id=${widget.patientId}');
+
+    debugPrint('--- [MENGAMBIL CPPT TERBARU] ---');
+    debugPrint('URL    : GET $url');
+    debugPrint('----------------------------------');
+
+    final response = await http.get(
+      url,
+      headers: {
+        'Accept': 'application/json',
+        if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final decodedBody = jsonDecode(response.body);
+      final List<dynamic> cpptList = (decodedBody['data'] as List<dynamic>?) ?? [];
+
+      if (cpptList.isEmpty) {
+        return null; // No CPPT records found
+      }
+
+      // Sort the list by date in descending order
+      cpptList.sort((a, b) {
+        final dateA = DateTime.tryParse(a['tanggal']?.toString() ?? '');
+        final dateB = DateTime.tryParse(b['tanggal']?.toString() ?? '');
+        if (dateA == null || dateB == null) return 0;
+        return dateB.compareTo(dateA); // Newest first
+      });
+
+      // Return the ID of the first item (the latest one)
+      final latestCpptId = int.tryParse(cpptList.first['id']?.toString() ?? '');
+      debugPrint('CPPT ID terbaru ditemukan: $latestCpptId');
+      return latestCpptId;
+    } else {
+      throw Exception('Gagal mengambil data CPPT: Status ${response.statusCode}');
+    }
+  }
+
+  // --- MODIFIED: FUNCTION TO SUBMIT INTERVENTION ---
+  Future<void> _submitIntervensi() async {
+    setState(() => _isLoading = true);
+    final token = widget.user.token ?? '';
+
+    try {
+      // 1. Get the latest CPPT ID first
+      final int? latestCpptId = await _getLatestCpptId(token);
+
+      if (latestCpptId == null) {
+        throw Exception(
+            'Tidak dapat membuat intervensi. Tidak ada data CPPT untuk pasien ini.');
+      }
+
+      // 2. Proceed to create the intervention
+      final base = _getBaseUrl();
+      if (base.isEmpty) throw Exception('API URL not found');
+      final apiUrl = base.endsWith('/') ? '${base}intervensi/' : '$base/intervensi/';
+
+      final body = jsonEncode({
+        'patient_id': widget.patientId,
+        'user_id': widget.user.id,
+        'query': _currentText,
+      });
+
+      debugPrint('--- [MENGIRIM POST KE INTERVENSI] ---');
+      debugPrint('URL    : POST $apiUrl');
+      debugPrint('BODY   : $body');
+      debugPrint('---------------------------------');
+
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+        body: body,
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
         if (!mounted) return;
+
+        final responseBody = jsonDecode(response.body);
+        int newIntervensiId = 0;
+        if (responseBody is Map) {
+          newIntervensiId = int.tryParse((responseBody['id'] ??
+                      responseBody['intervensi_id'] ??
+                      responseBody['data']?['id'])
+                  ?.toString() ??
+              '0') ?? 0;
+        }
+
+        if (newIntervensiId == 0) {
+          throw Exception("Gagal mendapatkan ID Intervensi dari server.");
+        }
+
+        debugPrint('Intervensi berhasil dikirim dengan ID: $newIntervensiId');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Sesi berakhir. Silakan login ulang.'),
-            backgroundColor: Colors.red,
+            content: Text('Intervensi berhasil disimpan!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // 3. Navigate to IntervensiInap with all necessary data
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => IntervensiInap(
+              intervensiId: newIntervensiId,
+              token: token,
+              patientId: widget.patientId,
+              perawatId: widget.user.id,
+              query: _currentText,
+              cpptId: latestCpptId, // Pass the fetched CPPT ID
+            ),
           ),
         );
       } else {
-        String errorMessage =
-            'Gagal mengirim cppt: Status Code ${response.statusCode}';
-        try {
-          final responseBody = jsonDecode(response.body);
-          if (responseBody is Map && responseBody.containsKey('message')) {
-            errorMessage = responseBody['message'].toString();
-          }
-        } catch (_) {}
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
-        );
+        _handleErrorResponse(response);
       }
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Terjadi kesalahan saat mengirim cppt: $e');
-      }
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Terjadi kesalahan: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _handleGenericError(e);
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+
+  void _handleErrorResponse(http.Response response) {
+    if (!mounted) return;
+    String errorMessage =
+        'Gagal mengirim data: Status Code ${response.statusCode}';
+    try {
+      final responseBody = jsonDecode(response.body);
+      if (responseBody is Map && responseBody.containsKey('message')) {
+        errorMessage = responseBody['message'].toString();
+      }
+    } catch (_) {}
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
+    );
+  }
+
+  void _handleGenericError(Object e) {
+    if (kDebugMode) debugPrint('Terjadi kesalahan: $e');
+    final errorMessage = e.toString().replaceAll('Exception: ', '');
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Terjadi kesalahan: $errorMessage'),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
 
   void _showEditSheet() {
@@ -238,6 +369,7 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
     const headingBlue = Color(0xFF0F4C81);
     const lightButtonBlue = Color(0xFF7FB0FF);
     const darkButtonBlue = Color(0xFF083B74);
+    const successButtonGreen = Color(0xFF28a745);
 
     return Scaffold(
       backgroundColor: background,
@@ -294,45 +426,38 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
                 ),
               ),
               const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 56,
+              SizedBox(
+                height: 56,
+                child: Row(
+                  children: [
+                    Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: _showEditSheet,
+                        onPressed: _isLoading ? null : _showEditSheet,
                         icon: const Icon(Icons.edit, color: Colors.white),
-                        label: const Text(
-                          'Edit',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                        ),
+                        label: const Text('Edit'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: lightButtonBlue,
                           foregroundColor: Colors.white,
+                          textStyle: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          elevation: 0,
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: SizedBox(
-                      height: 56,
+                    const SizedBox(width: 5),
+                    Expanded(
                       child: ElevatedButton(
-                        onPressed: _isLoading ? null : _submitAndNext,
+                        onPressed: _isLoading ? null : _submitCppt,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: darkButtonBlue,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          elevation: 0,
                         ),
                         child: _isLoading
                             ? const SizedBox(
@@ -344,17 +469,45 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
                                 ),
                               )
                             : const Text(
-                                'Next',
+                                'CPPT',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                  color: Colors.white,
+                                  fontSize: 14,
                                 ),
                               ),
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _submitIntervensi,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: successButtonGreen,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.0,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text(
+                                'Intervensi',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 22),
             ],

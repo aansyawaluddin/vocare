@@ -78,6 +78,7 @@ class _IntervensiListPageState extends State<IntervensiListPage> {
         backgroundColor: navyColor,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
+      backgroundColor: Colors.white,
       body: _buildBody(),
     );
   }
@@ -154,6 +155,7 @@ class IntervensiDetailCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
+      color: Colors.white,
       margin: const EdgeInsets.only(bottom: 16),
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
