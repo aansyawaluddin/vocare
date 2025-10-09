@@ -94,7 +94,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 800),
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -437,7 +437,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
               _autoRestartEnabled &&
               _isSessionActive &&
               !_reinitInProgress) {
-            await Future.delayed(const Duration(milliseconds: 250));
+            await Future.delayed(const Duration(milliseconds: 180));
             if (!mounted) return;
             if (_isSessionActive && _speechEnabled && !_reinitInProgress) {
               try {

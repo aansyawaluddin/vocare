@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
-import 'package:vocare/page/perawat/inap/intervensi.dart'; // Make sure this import is correct
+import 'package:vocare/page/perawat/inap/intervensi.dart';
 
 class CpptTambahan extends StatefulWidget {
   final int cpptId;
@@ -13,6 +13,7 @@ class CpptTambahan extends StatefulWidget {
   final String perawatId;
   final String query;
   final String? token;
+  final int assessmentId;
 
   const CpptTambahan({
     super.key,
@@ -21,6 +22,7 @@ class CpptTambahan extends StatefulWidget {
     required this.perawatId,
     required this.query,
     this.token,
+    required this.assessmentId,
   });
 
   @override
@@ -31,14 +33,12 @@ class _CpptTambahanState extends State<CpptTambahan> {
   static const background = Color.fromARGB(255, 223, 240, 255);
   static const cardBorder = Color(0xFFCED7E8);
   static const headingBlue = Color(0xFF0F4C81);
-  // MODIFIED: Changed button color name for clarity
   static const buttonIntervensi = Color(0xFF009563);
   static const buttonUpdate = Color(0xFF007BFF);
 
   Map<String, dynamic>? _cpptData;
   bool _isLoading = false;
-  // MODIFIED: Renamed state variable for clarity
-  bool _isPostingIntervensi = false;
+  // MODIFIED: State _isPostingIntervensi dihapus karena tidak ada lagi proses post di halaman ini.
   bool _isUpdating = false;
   String? _error;
 
@@ -112,11 +112,14 @@ class _CpptTambahanState extends State<CpptTambahan> {
         }
         setState(() {
           _cpptData = obj;
-          _subjectiveController.text = _cpptData?['subjective']?.toString() ?? '';
+          _subjectiveController.text =
+              _cpptData?['subjective']?.toString() ?? '';
           _objectiveController.text = _cpptData?['objective']?.toString() ?? '';
-          _assessmentController.text = _cpptData?['assessment']?.toString() ?? '';
+          _assessmentController.text =
+              _cpptData?['assessment']?.toString() ?? '';
           _planController.text = _cpptData?['plan']?.toString() ?? '';
-          _keteranganController.text = _cpptData?['keterangan']?.toString() ?? '';
+          _keteranganController.text =
+              _cpptData?['keterangan']?.toString() ?? '';
         });
       } else {
         String msg = resp.body;
@@ -157,8 +160,11 @@ class _CpptTambahanState extends State<CpptTambahan> {
 
     try {
       if (kDebugMode) debugPrint('PUT $url -> $body');
-      final response =
-          await http.put(Uri.parse(url), headers: headers, body: body);
+      final response = await http.put(
+        Uri.parse(url),
+        headers: headers,
+        body: body,
+      );
 
       if (!mounted) return;
 
@@ -194,78 +200,26 @@ class _CpptTambahanState extends State<CpptTambahan> {
     }
   }
 
-  // --- NEW FUNCTION TO POST INTERVENTION ---
-  Future<void> _postIntervensi() async {
-    setState(() => _isPostingIntervensi = true);
-
-    final url = '${_baseUrlFromEnv()}/intervensi/';
-    final headers = _buildHeaders();
-    final body = jsonEncode({
-      'patient_id': widget.patientId,
-      'user_id': widget.perawatId, // Assuming perawatId is the user_id
-      'query': widget.query,
-    });
-
-    try {
-      if (kDebugMode) debugPrint('POST $url -> $body');
-      final response =
-          await http.post(Uri.parse(url), headers: headers, body: body);
-
-      if (!mounted) return;
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
-
-        int? intervensiId;
-        if (data.containsKey('id')) {
-          intervensiId = int.tryParse(data['id'].toString());
-        } else if (data.containsKey('data') &&
-            data['data'] is Map &&
-            data['data']['id'] != null) {
-          intervensiId = int.tryParse(data['data']['id'].toString());
-        }
-
-        if (intervensiId == null) {
-          throw Exception('Gagal mendapatkan ID Intervensi dari server.');
-        }
-
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => IntervensiInap(
-              intervensiId: intervensiId!,
-              token: widget.token ?? '',
-              patientId: widget.patientId,
-              perawatId: widget.perawatId,
-              query: widget.query,
-              cpptId: widget.cpptId,
-            ),
-          ),
-        );
-      } else {
-        String msg = response.body;
-        try {
-          final parsed = jsonDecode(response.body);
-          if (parsed is Map && parsed['message'] != null)
-            msg = parsed['message'].toString();
-        } catch (_) {}
-        throw Exception(
-          'Gagal mengirim intervensi (${response.statusCode}): $msg',
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isPostingIntervensi = false);
-      }
-    }
+  // --- MODIFIED: Fungsi untuk navigasi ke halaman Intervensi ---
+  // Fungsi _postIntervensi() dihapus dan diganti dengan fungsi ini.
+  void _goToIntervensiPage() {
+    // Tidak ada lagi proses POST di sini.
+    // Langsung navigasi ke halaman IntervensiInap dengan membawa data yang diperlukan.
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => IntervensiInap(
+          token: widget.token ?? '',
+          patientId: widget.patientId,
+          perawatId: widget.perawatId,
+          query: widget.query,
+          cpptId: widget.cpptId,
+          // Anda mungkin perlu meneruskan data lain ke halaman IntervensiInap,
+          // misalnya data dari controller S-O-A-P jika dibutuhkan di sana.
+        ),
+      ),
+    );
   }
-
 
   Widget section(String title, {required Widget child}) {
     return Container(
@@ -389,15 +343,27 @@ class _CpptTambahanState extends State<CpptTambahan> {
             ),
           ),
           const SizedBox(height: 15),
-          section('Subjective', child: _buildEditableField(_subjectiveController)),
+          section(
+            'Subjective',
+            child: _buildEditableField(_subjectiveController),
+          ),
           const SizedBox(height: 10),
-          section('Objective', child: _buildEditableField(_objectiveController)),
+          section(
+            'Objective',
+            child: _buildEditableField(_objectiveController),
+          ),
           const SizedBox(height: 10),
-          section('Assessment', child: _buildEditableField(_assessmentController)),
+          section(
+            'Assessment',
+            child: _buildEditableField(_assessmentController),
+          ),
           const SizedBox(height: 10),
           section('Plan', child: _buildEditableField(_planController)),
           const SizedBox(height: 10),
-          section('Keterangan', child: _buildEditableField(_keteranganController)),
+          section(
+            'Keterangan',
+            child: _buildEditableField(_keteranganController),
+          ),
           const SizedBox(height: 10),
           if ((d['dokter'] ?? '').toString().isNotEmpty)
             section(
@@ -419,12 +385,13 @@ class _CpptTambahanState extends State<CpptTambahan> {
     );
   }
 
-  Widget _buildLoadingButton(
-      {required bool isLoading,
-      required VoidCallback? onPressed,
-      required String text,
-      required String loadingText,
-      required Color color}) {
+  Widget _buildLoadingButton({
+    required bool isLoading,
+    required VoidCallback? onPressed,
+    required String text,
+    required String loadingText,
+    required Color color,
+  }) {
     return SizedBox(
       height: 52,
       child: ElevatedButton(
@@ -451,19 +418,24 @@ class _CpptTambahanState extends State<CpptTambahan> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Text(loadingText)
+                  Text(loadingText),
                 ],
               )
-            : Text(text,
-                style:
-                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+            : Text(
+                text,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
+              ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool isActionInProgress = _isLoading || _isPostingIntervensi || _isUpdating;
+    // MODIFIED: _isPostingIntervensi dihapus dari kondisi ini
+    final bool isActionInProgress = _isLoading || _isUpdating;
 
     return Scaffold(
       backgroundColor: background,
@@ -476,7 +448,6 @@ class _CpptTambahanState extends State<CpptTambahan> {
         backgroundColor: const Color(0xFFD7E2FD),
       ),
       body: SafeArea(child: _buildBody()),
-      // --- MODIFIED: BOTTOM NAVIGATION BAR ---
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(20, 8, 20, 18),
         child: Padding(
@@ -494,15 +465,28 @@ class _CpptTambahanState extends State<CpptTambahan> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _buildLoadingButton(
-                  // Use the new state variable
-                  isLoading: _isPostingIntervensi,
-                  // Call the new function
-                  onPressed: isActionInProgress ? null : _postIntervensi,
-                  // Updated button text
-                  text: 'Buat Intervensi',
-                  loadingText: 'Mengirim...',
-                  color: buttonIntervensi,
+                // MODIFIED: Tombol ini sekarang tidak lagi menampilkan loading
+                // karena hanya berfungsi sebagai tombol navigasi.
+                child: SizedBox(
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: isActionInProgress ? null : _goToIntervensiPage,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: buttonIntervensi,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Buat Intervensi',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],

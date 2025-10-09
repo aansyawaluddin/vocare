@@ -1,5 +1,3 @@
-// lib/page/perawat/inap/review_tambahan.dart
-
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -47,19 +45,66 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
     return dotenv.env['API_URL'] ?? dotenv.env['API_BASE_URL'] ?? '';
   }
 
+  Future<int?> _getLatestAssessmentId(String token) async {
+    final base = _getBaseUrl();
+    if (base.isEmpty) throw Exception('API URL not found');
+    final url = Uri.parse('$base/assesments?patient_id=${widget.patientId}');
+
+    debugPrint('--- [MENGAMBIL ASSESSMENT TERBARU] ---');
+    debugPrint('URL    : GET $url');
+    debugPrint('----------------------------------');
+
+    final response = await http.get(
+      url,
+      headers: {
+        'Accept': 'application/json',
+        if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final decodedBody = jsonDecode(response.body);
+      final List<dynamic> assessmentList = (decodedBody['data'] as List<dynamic>?) ?? [];
+
+      if (assessmentList.isEmpty) {
+        return null;
+      }
+
+      assessmentList.sort((a, b) {
+        final dateA = DateTime.tryParse(a['tanggal']?.toString() ?? '');
+        final dateB = DateTime.tryParse(b['tanggal']?.toString() ?? '');
+        if (dateA == null || dateB == null) return 0;
+        return dateB.compareTo(dateA); // Newest first
+      });
+
+      final latestAssessmentId = int.tryParse(assessmentList.first['id']?.toString() ?? '');
+      debugPrint('Assessment ID terbaru ditemukan: $latestAssessmentId');
+      return latestAssessmentId;
+    } else {
+      throw Exception('Gagal mengambil data Assessment: Status ${response.statusCode}');
+    }
+  }
+
   Future<void> _submitCppt() async {
     setState(() => _isLoading = true);
+    final token = widget.user.token ?? '';
 
     try {
+      final int? latestAssessmentId = await _getLatestAssessmentId(token);
+
+      if (latestAssessmentId == null) {
+        throw Exception('Tidak dapat membuat CPPT. Tidak ada data Assessment untuk pasien ini.');
+      }
+      
       final base = _getBaseUrl();
       if (base.isEmpty) throw Exception('NO_API');
       final apiUrl = base.endsWith('/') ? '${base}cppt/' : '$base/cppt/';
-      final token = widget.user.token ?? '';
 
       final body = jsonEncode({
         'patient_id': widget.patientId,
         'perawat_id': widget.user.id,
         'query': _currentText,
+        'assessment_id': latestAssessmentId,
       });
 
       if (kDebugMode) {
@@ -86,13 +131,13 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
         if (responseBody is Map) {
           cpptId =
               int.tryParse(
-                    (responseBody['id'] ??
-                                responseBody['cppt_id'] ??
-                                responseBody['data']?['id'])
-                            ?.toString() ??
-                        '0',
-                  ) ??
-                  0;
+                      (responseBody['id'] ??
+                              responseBody['cppt_id'] ??
+                              responseBody['data']?['id'])
+                          ?.toString() ??
+                          '0',
+                    ) ??
+                    0;
         }
 
         debugPrint('Laporan CPPT berhasil dikirim dengan CPPT ID: $cpptId');
@@ -113,6 +158,7 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
               patientId: widget.patientId,
               perawatId: widget.user.id,
               query: _currentText,
+              assessmentId: latestAssessmentId,
             ),
           ),
         );
@@ -126,7 +172,6 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
     }
   }
 
-  // --- NEW: FUNCTION TO GET THE LATEST CPPT ID ---
   Future<int?> _getLatestCpptId(String token) async {
     final base = _getBaseUrl();
     if (base.isEmpty) throw Exception('API URL not found');
@@ -149,10 +194,9 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
       final List<dynamic> cpptList = (decodedBody['data'] as List<dynamic>?) ?? [];
 
       if (cpptList.isEmpty) {
-        return null; // No CPPT records found
+        return null;
       }
 
-      // Sort the list by date in descending order
       cpptList.sort((a, b) {
         final dateA = DateTime.tryParse(a['tanggal']?.toString() ?? '');
         final dateB = DateTime.tryParse(b['tanggal']?.toString() ?? '');
@@ -160,7 +204,6 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
         return dateB.compareTo(dateA); // Newest first
       });
 
-      // Return the ID of the first item (the latest one)
       final latestCpptId = int.tryParse(cpptList.first['id']?.toString() ?? '');
       debugPrint('CPPT ID terbaru ditemukan: $latestCpptId');
       return latestCpptId;
@@ -169,99 +212,45 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
     }
   }
 
-  // --- MODIFIED: FUNCTION TO SUBMIT INTERVENTION ---
-  Future<void> _submitIntervensi() async {
+  // --- MODIFIED: FUNCTION TO NAVIGATE TO INTERVENSI PAGE ---
+  Future<void> _navigateToIntervensi() async {
     setState(() => _isLoading = true);
     final token = widget.user.token ?? '';
-
     try {
       // 1. Get the latest CPPT ID first
       final int? latestCpptId = await _getLatestCpptId(token);
-
       if (latestCpptId == null) {
         throw Exception(
-            'Tidak dapat membuat intervensi. Tidak ada data CPPT untuk pasien ini.');
+            'Tidak dapat melanjutkan. Tidak ada data CPPT untuk pasien ini.');
       }
 
-      // 2. Proceed to create the intervention
-      final base = _getBaseUrl();
-      if (base.isEmpty) throw Exception('API URL not found');
-      final apiUrl = base.endsWith('/') ? '${base}intervensi/' : '$base/intervensi/';
+      if (!mounted) return;
 
-      final body = jsonEncode({
-        'patient_id': widget.patientId,
-        'user_id': widget.user.id,
-        'query': _currentText,
-      });
-
-      debugPrint('--- [MENGIRIM POST KE INTERVENSI] ---');
-      debugPrint('URL    : POST $apiUrl');
-      debugPrint('BODY   : $body');
-      debugPrint('---------------------------------');
-
-      final response = await http.post(
-        Uri.parse(apiUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          if (token.isNotEmpty) 'Authorization': 'Bearer $token',
-        },
-        body: body,
+      // 2. Navigate to IntervensiInap page with all necessary data
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => IntervensiInap(
+            token: token,
+            patientId: widget.patientId,
+            perawatId: widget.user.id, 
+            query: _currentText,
+            cpptId: latestCpptId,
+          ),
+        ),
       );
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        if (!mounted) return;
-
-        final responseBody = jsonDecode(response.body);
-        int newIntervensiId = 0;
-        if (responseBody is Map) {
-          newIntervensiId = int.tryParse((responseBody['id'] ??
-                      responseBody['intervensi_id'] ??
-                      responseBody['data']?['id'])
-                  ?.toString() ??
-              '0') ?? 0;
-        }
-
-        if (newIntervensiId == 0) {
-          throw Exception("Gagal mendapatkan ID Intervensi dari server.");
-        }
-
-        debugPrint('Intervensi berhasil dikirim dengan ID: $newIntervensiId');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Intervensi berhasil disimpan!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-
-        // 3. Navigate to IntervensiInap with all necessary data
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => IntervensiInap(
-              intervensiId: newIntervensiId,
-              token: token,
-              patientId: widget.patientId,
-              perawatId: widget.user.id,
-              query: _currentText,
-              cpptId: latestCpptId, // Pass the fetched CPPT ID
-            ),
-          ),
-        );
-      } else {
-        _handleErrorResponse(response);
-      }
     } catch (e) {
       _handleGenericError(e);
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-
   void _handleErrorResponse(http.Response response) {
     if (!mounted) return;
-    String errorMessage =
-        'Gagal mengirim data: Status Code ${response.statusCode}';
+    String errorMessage = 'Gagal mengirim data: Status Code ${response.statusCode}';
     try {
       final responseBody = jsonDecode(response.body);
       if (responseBody is Map && responseBody.containsKey('message')) {
@@ -480,7 +469,8 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
                     const SizedBox(width: 5),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: _isLoading ? null : _submitIntervensi,
+                        // --- MODIFIED: Call the new navigation function ---
+                        onPressed: _isLoading ? null : _navigateToIntervensi,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: successButtonGreen,
                           foregroundColor: Colors.white,

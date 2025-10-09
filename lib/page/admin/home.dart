@@ -66,7 +66,7 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
         );
 
       case 2:
-        return const PieChartDashboard();
+        return const AssessmentsPieChart();
 
       case 3:
         return PasienInapAdmin(user: widget.user);

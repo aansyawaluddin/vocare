@@ -51,10 +51,21 @@ class _IntervensiListPageState extends State<IntervensiListPage> {
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         if (body['data'] is List) {
+          List<Map<String, dynamic>> allIntervensi = List<Map<String, dynamic>>.from(body['data']);
+
+          // MODIFIKASI: Filter data berdasarkan patient_id yang sesuai
+          final filteredList = allIntervensi.where((intervensi) {
+            // Perbandingan harus dilakukan secara string atau integer. 
+            // Menggunakan .toString() untuk memastikan perbandingan yang akurat
+            return intervensi['patient_id']?.toString() == widget.patientId.toString();
+          }).toList();
+
           setState(() {
-            _intervensiList = List<Map<String, dynamic>>.from(body['data']);
+            _intervensiList = filteredList; // Gunakan daftar yang sudah difilter
             _isLoading = false;
           });
+        } else {
+           throw Exception('Format data tidak valid.');
         }
       } else {
         throw Exception('Gagal memuat daftar Intervensi: Status Code ${response.statusCode}');

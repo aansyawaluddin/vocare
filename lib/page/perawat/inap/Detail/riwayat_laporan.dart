@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:vocare/common/type.dart';
 import 'package:vocare/page/perawat/inap/Detail/detail_laporan.dart';
-import 'package:vocare/page/perawat/inap/voice.dart';
 
 class DaftarRiwayatPage extends StatefulWidget {
   final User user;

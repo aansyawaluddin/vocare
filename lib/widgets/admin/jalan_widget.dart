@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:vocare/common/type.dart';
 import 'package:vocare/page/admin/riwayat_laporan.dart';
-import 'package:vocare/page/perawat/inap/Detail/riwayat_laporan.dart';
 
-class PasienJalanWidget extends StatefulWidget {
-  const PasienJalanWidget({
+class PasienJalanAdminWidget extends StatefulWidget {
+  const PasienJalanAdminWidget({
     super.key,
     required this.inpatients,
     required this.navy,
@@ -22,10 +21,10 @@ class PasienJalanWidget extends StatefulWidget {
   final User user;
 
   @override
-  State<PasienJalanWidget> createState() => _PasienJalanWidgetState();
+  State<PasienJalanAdminWidget> createState() => _PasienJalanWidgetState();
 }
 
-class _PasienJalanWidgetState extends State<PasienJalanWidget> {
+class _PasienJalanWidgetState extends State<PasienJalanAdminWidget> {
   String? _selectedRoom;
 
   @override
@@ -63,7 +62,7 @@ class _PasienJalanWidgetState extends State<PasienJalanWidget> {
       children: [
         const SizedBox(height: 8),
         Text(
-          'Pasien Rawat Inap :',
+          'Pasien Rawat Jalan :',
           style: TextStyle(
             color: navy,
             fontWeight: FontWeight.w700,

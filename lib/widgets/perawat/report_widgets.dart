@@ -180,6 +180,12 @@ Widget buildRiwayatKesehatanSection(Map<String, dynamic> extractedFields) {
     ),
     const Divider(),
     buildInfoRow('Alergi', extractedFields['alergi']?.toString(), bold: true),
+
+    const Divider(),
+    Text(
+      'Pemeriksanaan Sistem:',
+      style: TextStyle(fontWeight: FontWeight.w600),
+    ),
   ]);
 }
 
@@ -226,10 +232,7 @@ Widget buildAsesmenNyeriSection(Map<String, dynamic> extractedFields) {
       extractedFields['faktor_penghilang_nyeri']?.toString(),
       bold: true,
     ),
-    buildInfoRow(
-      'Skala Nyeri',
-      extractedFields['skala']?.toString(),
-    ),
+    buildInfoRow('Skala Nyeri', extractedFields['skala']?.toString()),
   ]);
 }
 
@@ -325,17 +328,17 @@ Widget buildRencanaPerawatanSection(Map<String, dynamic> extractedFields) {
 Widget buildMasalahKeperawatanSection(Map<String, dynamic> extractedFields) {
   final List<dynamic> masalahList =
       extractedFields['masalah_keperawatan_list'] is List
-          ? extractedFields['masalah_keperawatan_list'] as List<dynamic>
-          : [];
+      ? extractedFields['masalah_keperawatan_list'] as List<dynamic>
+      : [];
 
-  final String masalahDisplay =
-      masalahList.isEmpty ? '-' : masalahList.map((e) => e.toString()).join(', ');
+  final String masalahDisplay = masalahList.isEmpty
+      ? '-'
+      : masalahList.map((e) => e.toString()).join(', ');
 
   return buildSectionCard('12. Masalah Keperawatan', [
     buildInfoRow('Daftar Masalah', masalahDisplay, bold: true),
   ]);
 }
-
 
 class RencanaAsuhanEditor extends StatefulWidget {
   final List<String> initialRencana;
@@ -378,10 +381,15 @@ class _RencanaAsuhanEditorState extends State<RencanaAsuhanEditor> {
         content: TextField(
           controller: controller,
           maxLines: 4,
-          decoration: const InputDecoration(hintText: 'Tulis rencana asuhan...'),
+          decoration: const InputDecoration(
+            hintText: 'Tulis rencana asuhan...',
+          ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Batal')),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Batal'),
+          ),
           ElevatedButton(
             style: ButtonStyle(
               backgroundColor: MaterialStateProperty.all(_colors.buttonSave),
@@ -410,39 +418,42 @@ class _RencanaAsuhanEditorState extends State<RencanaAsuhanEditor> {
       return buildInfoCard(child: Text('-'));
     }
 
-    return buildSectionCard(
-      '13 Rencana Asuhan Keperawatan',
-      [
-        if (_items.isEmpty) const Text('Belum ada rencana asuhan.'),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _items.length,
-          itemBuilder: (context, idx) {
-            final text = _items[idx];
-            return Dismissible(
-              key: ValueKey('rencana_${idx}_${text.hashCode}'),
-              direction: widget.editable ? DismissDirection.endToStart : DismissDirection.none,
-              background: Container(
-                color: Colors.redAccent,
-                alignment: Alignment.centerRight,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: const Icon(Icons.delete, color: Colors.white),
-              ),
-              onDismissed: widget.editable
-                  ? (_) {
-                      _items.removeAt(idx);
-                      _notify();
-                    }
-                  : null,
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text('${idx + 1}. $text'),
-                trailing: widget.editable
-                    ? Row(mainAxisSize: MainAxisSize.min, children: [
+    return buildSectionCard('13 Rencana Asuhan Keperawatan', [
+      if (_items.isEmpty) const Text('Belum ada rencana asuhan.'),
+      ListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: _items.length,
+        itemBuilder: (context, idx) {
+          final text = _items[idx];
+          return Dismissible(
+            key: ValueKey('rencana_${idx}_${text.hashCode}'),
+            direction: widget.editable
+                ? DismissDirection.endToStart
+                : DismissDirection.none,
+            background: Container(
+              color: Colors.redAccent,
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: const Icon(Icons.delete, color: Colors.white),
+            ),
+            onDismissed: widget.editable
+                ? (_) {
+                    _items.removeAt(idx);
+                    _notify();
+                  }
+                : null,
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text('${idx + 1}. $text'),
+              trailing: widget.editable
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                         IconButton(
                           icon: const Icon(Icons.edit_outlined),
-                          onPressed: () => _showEditDialog(current: text, index: idx),
+                          onPressed: () =>
+                              _showEditDialog(current: text, index: idx),
                         ),
                         IconButton(
                           icon: const Icon(Icons.delete_outline),
@@ -453,23 +464,23 @@ class _RencanaAsuhanEditorState extends State<RencanaAsuhanEditor> {
                             _notify();
                           },
                         ),
-                      ])
-                    : null,
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 8),
-        if (widget.editable)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.add),
-              label: const Text('Tambah Rencana'),
-              onPressed: () => _showEditDialog(),
+                      ],
+                    )
+                  : null,
             ),
+          );
+        },
+      ),
+      const SizedBox(height: 8),
+      if (widget.editable)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.add),
+            label: const Text('Tambah Rencana'),
+            onPressed: () => _showEditDialog(),
           ),
-      ],
-    );
+        ),
+    ]);
   }
 }

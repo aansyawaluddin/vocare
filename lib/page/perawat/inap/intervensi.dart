@@ -1,24 +1,19 @@
-// lib/page/perawat/inap/intervensi.dart
-
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
-import 'package:vocare/page/perawat/inap/laporan.dart'; // Make sure this import is correct
+import 'package:vocare/page/perawat/inap/laporan.dart';
 
 class IntervensiInap extends StatefulWidget {
-  final int intervensiId;
   final String token;
-  // --- ADDED: Parameters passed from the previous page ---
   final String patientId;
   final String perawatId;
-  final String query;
+  final String query; // Query awal tetap dibawa untuk referensi
   final int cpptId;
 
   const IntervensiInap({
     super.key,
-    required this.intervensiId,
     required this.token,
     required this.patientId,
     required this.perawatId,
@@ -31,11 +26,12 @@ class IntervensiInap extends StatefulWidget {
 }
 
 class _IntervensiInapState extends State<IntervensiInap> {
-  bool _isLoading = true;
-  // --- ADDED: State for the new 'Buat Laporan' button ---
-  bool _isPostingLaporan = false;
-  Map<String, dynamic>? _intervensiData;
-  String? _error;
+  // --- MODIFIED: Added controllers for the form fields ---
+  late final TextEditingController _implementasiController;
+  late final TextEditingController _evaluasiController;
+  final _formKey = GlobalKey<FormState>();
+
+  bool _isSubmitting = false;
 
   static const Color headingBlue = Color(0xFF0F4C81);
   static const Color buttonSave = Color(0xFF009563);
@@ -43,104 +39,80 @@ class _IntervensiInapState extends State<IntervensiInap> {
   @override
   void initState() {
     super.initState();
-    _fetchIntervensiData();
+    // Initialize controllers
+    _implementasiController = TextEditingController();
+    _evaluasiController = TextEditingController();
   }
 
-  Future<void> _fetchIntervensiData() async {
-    if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+  @override
+  void dispose() {
+    // Dispose controllers to free up resources
+    _implementasiController.dispose();
+    _evaluasiController.dispose();
+    super.dispose();
+  }
+
+  // --- NEW: FUNCTION TO SUBMIT THE INTERVENTION FORM ---
+  Future<void> _submitIntervensi() async {
+    // Validate the form
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
 
     try {
       final base = dotenv.env['API_URL'] ?? dotenv.env['API_BASE_URL'] ?? '';
       if (base.isEmpty) throw Exception('API URL tidak ditemukan di .env');
 
-      final url = Uri.parse('$base/intervensi/${widget.intervensiId}');
+      final url = Uri.parse('$base/intervensi/');
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer ${widget.token}',
+      };
 
-      final response = await http.get(
-        url,
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer ${widget.token}',
-        },
-      );
+      // --- MODIFIED: Body now uses controller text ---
+      final body = jsonEncode({
+        'patient_id': widget.patientId,
+        'user_id': widget.perawatId,
+        'implementasi': _implementasiController.text,
+        'evaluasi': _evaluasiController.text,
+      });
 
-      if (response.statusCode == 200) {
-        final decodedBody = jsonDecode(response.body);
-        if (decodedBody is Map<String, dynamic>) {
-          _intervensiData =
-              (decodedBody['data'] as Map<String, dynamic>?) ?? decodedBody;
-        } else {
-          throw Exception('Format respons tidak valid');
-        }
-      } else {
-        throw Exception('Gagal memuat data: Status ${response.statusCode}');
+      if (kDebugMode) {
+        debugPrint('--- [MENGIRIM INTERVENSI BARU] ---');
+        debugPrint('URL    : POST $url');
+        debugPrint('BODY   : $body');
+        debugPrint('---------------------------------');
       }
-    } catch (e) {
-      _error = e.toString().replaceAll('Exception: ', '');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
 
-  // --- NEW FUNCTION TO POST LAPORAN ---
-  Future<void> _postLaporan() async {
-    setState(() => _isPostingLaporan = true);
-
-    final base = dotenv.env['API_URL'] ?? dotenv.env['API_BASE_URL'] ?? '';
-    final url = Uri.parse('$base/laporan/');
-    final headers = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': 'Bearer ${widget.token}',
-    };
-    final body = jsonEncode({
-      // Based on your requirement
-      "cppt_id": widget.cpptId,
-      "patient_id": widget.patientId,
-      "perawat_id": widget.perawatId,
-      "intevensi_id": widget.intervensiId, // The ID of the current intervensi
-      "query": widget.query,
-    });
-
-    try {
-      debugPrint('POST ${url.toString()} -> $body');
       final response = await http.post(url, headers: headers, body: body);
 
-      if (!mounted) return;
-
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final responseBody = jsonDecode(response.body);
-        int? laporanId;
-        if (responseBody is Map) {
-          laporanId = int.tryParse(
-                (responseBody['id'] ?? responseBody['data']?['id'])?.toString() ??
-                    '',
-              ) ??
-              0;
-        }
-        if (laporanId == 0 || laporanId == null) {
-          throw Exception('Gagal mendapatkan ID Laporan dari respons server.');
+        final decodedBody = jsonDecode(response.body);
+        final dynamic newIntervensiId = (decodedBody is Map)
+            ? (decodedBody['data']?['id'] ?? decodedBody['id'])
+            : null;
+
+        if (newIntervensiId == null) {
+          throw Exception('Gagal mendapatkan ID Intervensi dari server.');
         }
 
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => LaporanTambahan(
-              laporanId: laporanId!,
-              token: widget.token,
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Intervensi berhasil disimpan!'),
+              backgroundColor: Colors.green,
             ),
-          ),
-        );
+          );
+          // After submitting intervention, proceed to post the report
+          await _postLaporan(newIntervensiId);
+        }
       } else {
         throw Exception(
-            'Gagal membuat laporan (Status ${response.statusCode}): ${response.body}');
+          'Gagal membuat data intervensi: Status ${response.statusCode}, Body: ${response.body}',
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -153,18 +125,65 @@ class _IntervensiInapState extends State<IntervensiInap> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isPostingLaporan = false);
+        setState(() => _isSubmitting = false);
       }
     }
   }
 
+  // --- MODIFIED: This function now accepts the intervensiId ---
+  Future<void> _postLaporan(dynamic intervensiId) async {
+    final base = dotenv.env['API_URL'] ?? dotenv.env['API_BASE_URL'] ?? '';
+    final url = Uri.parse('$base/laporan/');
+    final headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Authorization': 'Bearer ${widget.token}',
+    };
+    final body = jsonEncode({
+      "cppt_id": widget.cpptId,
+      "patient_id": widget.patientId,
+      "perawat_id": widget.perawatId,
+      "intevensi_id": intervensiId,
+      "query": widget.query,
+    });
 
-  String formatDate(String dateString) {
     try {
-      final dateTime = DateTime.parse(dateString);
-      return DateFormat('d MMMM yyyy, HH:mm', 'id_ID').format(dateTime);
+      debugPrint('POST ${url.toString()} -> $body');
+      final response = await http.post(url, headers: headers, body: body);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final responseBody = jsonDecode(response.body);
+        final int? laporanId = int.tryParse(
+          (responseBody['data']?['id'] ?? responseBody['id'])?.toString() ?? '',
+        );
+
+        if (laporanId == null) {
+          throw Exception('Gagal mendapatkan ID Laporan dari respons server.');
+        }
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                LaporanTambahan(laporanId: laporanId, token: widget.token),
+          ),
+        );
+      } else {
+        throw Exception(
+          'Gagal membuat laporan (Status ${response.statusCode}): ${response.body}',
+        );
+      }
     } catch (e) {
-      return dateString;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -172,18 +191,73 @@ class _IntervensiInapState extends State<IntervensiInap> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Detail Intervensi"),
+        title: const Text("Buat Intervensi Baru"),
         backgroundColor: const Color(0xFFD7E2FD),
       ),
+      backgroundColor: Colors.white,
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: _buildContent(),
+        // --- MODIFIED: Body is now a form ---
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            children: [
+              const Text(
+                'Implementasi',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: headingBlue,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _implementasiController,
+                maxLines: 5,
+                decoration: const InputDecoration(
+                  hintText: 'Masukkan detail implementasi...',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Implementasi tidak boleh kosong';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Evaluasi',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: headingBlue,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _evaluasiController,
+                maxLines: 5,
+                decoration: const InputDecoration(
+                  hintText: 'Masukkan detail evaluasi...',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Evaluasi tidak boleh kosong';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
       ),
-      // --- ADDED: BOTTOM NAVIGATION BAR FOR 'Buat Laporan' BUTTON ---
+      // --- MODIFIED: Bottom button now submits the form ---
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(16, 8, 16, 18),
         child: ElevatedButton(
-          onPressed: (_isLoading || _isPostingLaporan) ? null : _postLaporan,
+          onPressed: _isSubmitting ? null : _submitIntervensi,
           style: ElevatedButton.styleFrom(
             backgroundColor: buttonSave,
             foregroundColor: Colors.white,
@@ -192,7 +266,7 @@ class _IntervensiInapState extends State<IntervensiInap> {
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          child: _isPostingLaporan
+          child: _isSubmitting
               ? const SizedBox(
                   height: 24,
                   width: 24,
@@ -202,98 +276,9 @@ class _IntervensiInapState extends State<IntervensiInap> {
                   ),
                 )
               : const Text(
-                  'Buat Laporan',
+                  'Simpan Intervensi & Buat Laporan',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildContent() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text('Terjadi kesalahan: $_error', textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _fetchIntervensiData,
-              child: const Text('Coba Lagi'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return intervensiSection();
-  }
-
-  Widget intervensiSection() {
-    if (_intervensiData == null) {
-      return const Center(child: Text('Tidak ada data intervensi.'));
-    }
-
-    final iv = _intervensiData!;
-    final tanggalRaw = iv['tanggal']?.toString() ?? iv['created_at']?.toString();
-    final tanggal = tanggalRaw != null ? formatDate(tanggalRaw) : '-';
-    final evaluasi =
-        iv['evaluasi']?.toString() ?? iv['evaluation']?.toString() ?? '-';
-    final implementasi = iv['implementasi']?.toString() ??
-        iv['implementation']?.toString() ??
-        '-';
-
-    return SingleChildScrollView(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              spreadRadius: 2,
-              blurRadius: 5,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.event_note, size: 18, color: headingBlue),
-                const SizedBox(width: 8),
-                Text(
-                  tanggal,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 16),
-                ),
-              ],
-            ),
-            const Divider(height: 24),
-            const Text(
-              'Implementasi',
-              style: TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 16, color: headingBlue),
-            ),
-            const SizedBox(height: 6),
-            Text(implementasi, style: const TextStyle(fontSize: 15, height: 1.5)),
-            const SizedBox(height: 16),
-            const Text(
-              'Evaluasi',
-              style: TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 16, color: headingBlue),
-            ),
-            const SizedBox(height: 6),
-            Text(evaluasi, style: const TextStyle(fontSize: 15, height: 1.5)),
-          ],
         ),
       ),
     );

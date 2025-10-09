@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:vocare/common/type.dart';
-import 'package:vocare/widgets/admin/inap_widget.dart';
+import 'package:vocare/widgets/admin/jalan_widget.dart';
 
 class PasienJalanAdmin extends StatefulWidget {
   final User user;
@@ -186,7 +186,7 @@ class _PasienJalanAdminState extends State<PasienJalanAdmin> {
         return SizedBox(
           height: constraints.maxHeight,
           width: constraints.maxWidth,
-          child: PasienInapAdminWidget(
+          child: PasienJalanAdminWidget(
             user: widget.user,
             inpatients: _inpatientsForUI,
             navy: navyColor,

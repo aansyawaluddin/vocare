@@ -300,8 +300,8 @@ class _LaporanTambahanState extends State<LaporanTambahan> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
-                    width: 24,
-                    height: 24,
+                    width: 20,
+                    height: 20,
                     padding: const EdgeInsets.all(2.0),
                     child: const CircularProgressIndicator(
                       color: Colors.white,
