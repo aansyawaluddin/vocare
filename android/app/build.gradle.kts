@@ -5,6 +5,10 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+dependencies {
+    implementation("androidx.appcompat:appcompat:1.4.0")
+}
+
 android {
     namespace = "com.example.vocare"
     compileSdk = flutter.compileSdkVersion
@@ -42,5 +46,3 @@ android {
 flutter {
     source = "../.."
 }
-
-dependencies { implementation 'androidx.appcompat:appcompat:1.4.0}
