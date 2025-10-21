@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
-import 'package:vocare/widgets/perawat/report_widgets.dart';
+import 'package:vocare/widgets/perawat/report_laporan.dart';
 import 'package:vocare/widgets/perawat/report_utils.dart';
 import 'package:vocare/page/perawat/laporan/cppt_and_intervensi.dart';
 
@@ -271,8 +271,6 @@ class _VocareReport2State extends State<VocareReport2> {
       rethrow;
     }
   }
-
-  // === NEW: _createIntervensi method removed from VocareReport2 ===
 
   int _detectPerawatId(
     Map<String, dynamic>? merged,
@@ -553,7 +551,7 @@ class _VocareReport2State extends State<VocareReport2> {
               token: widget.token,
               patientId: patientId,
               perawatId: perawatId,
-              intervensiId: null, // Set null/0 karena intervensi dibuat di VocareReport3
+              intervensiId: null,
               query: widget.reportText,
             ),
           ),
@@ -1025,16 +1023,14 @@ class _VocareReport2State extends State<VocareReport2> {
                   const SizedBox(height: _sectionSpacing),
                   buildStatusPsikososialSection(extractedFields),
                   const SizedBox(height: _sectionSpacing),
-                  buildRencanaPerawatanSection(extractedFields),
-                  const SizedBox(height: _sectionSpacing),
                   buildMasalahKeperawatanSection(extractedFields),
                   const SizedBox(height: _sectionSpacing),
-                  RencanaAsuhanEditor(
-                    initialRencana: _rencanaAsuhan,
-                    editable: true,
-                    onChanged: _onRencanaChanged,
-                  ),
-                  const SizedBox(height: _sectionSpacing),
+                  // buildRencanaAsuhanSection(extractedFields),
+                  // RencanaAsuhanEditor(
+                  //   initialRencana: _rencanaAsuhan,
+                  //   editable: true,
+                  //   onChanged: _onRencanaChanged,
+                  // ),
                 ],
               ),
             ),
@@ -1073,37 +1069,37 @@ class _VocareReport2State extends State<VocareReport2> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: (_isSaving)
-                            ? null
-                            : _saveRencanaAsuhan_StrictPut,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange.shade700,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 0,
-                        ),
-                        child: _isSaving
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text(
-                                'Simpan Rencana',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                ),
-                              ),
-                      ),
-                    ),
+                    // Expanded(
+                    //   child: ElevatedButton(
+                    //     onPressed: (_isSaving)
+                    //         ? null
+                    //         : _saveRencanaAsuhan_StrictPut,
+                    //     style: ElevatedButton.styleFrom(
+                    //       backgroundColor: Colors.orange.shade700,
+                    //       shape: RoundedRectangleBorder(
+                    //         borderRadius: BorderRadius.circular(12),
+                    //       ),
+                    //       elevation: 0,
+                    //     ),
+                    //     child: _isSaving
+                    //         ? const SizedBox(
+                    //             width: 16,
+                    //             height: 16,
+                    //             child: CircularProgressIndicator(
+                    //               strokeWidth: 2,
+                    //               color: Colors.white,
+                    //             ),
+                    //           )
+                    //         : const Text(
+                    //             'Simpan Rencana',
+                    //             style: TextStyle(
+                    //               fontWeight: FontWeight.w600,
+                    //               color: Colors.white,
+                    //               fontSize: 14,
+                    //             ),
+                    //           ),
+                    //   ),
+                    // ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: ElevatedButton(

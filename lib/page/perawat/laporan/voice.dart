@@ -11,6 +11,7 @@ import 'package:vocare/common/type.dart';
 import 'package:vocare/page/perawat/laporan/review.dart';
 
 enum VoiceState { initial, listening, processing }
+
 enum DataState { loading, loaded, error }
 
 const String _kCacheKey = 'vocare_questions_cache_v1';
@@ -56,12 +57,12 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
   String _activeQuestionSet = 'pasien';
 
   final List<String> _initialQuestions = const [
-    "Siapa nama lengkap pasien?",
     "Berapa nomor rekam medis pasien?",
+    "Siapa nama lengkap pasien?",
     "Apa jenis kelamin pasien?",
     "Kapan tanggal lahir pasien?",
     "Apa status perkawinan pasien?",
-    "Apa alamat pasien?",
+    "Dimana alamat pasien?",
     "Apa pekerjaan pasien?",
     "Siapa nama penanggung jawab pasien?",
     "Apa hubungan penanggung jawab dengan pasien?",
@@ -144,7 +145,9 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
         if (showErrors) throw Exception('API_URL not found in .env file');
         return;
       }
-      final response = await http.get(Uri.parse('$apiUrl/assesments/questions'));
+      final response = await http.get(
+        Uri.parse('$apiUrl/assesments/questions'),
+      );
       if (response.statusCode == 200) {
         final decodedData = json.decode(response.body);
         final data = decodedData['data'] as Map<String, dynamic>? ?? {};
@@ -167,7 +170,8 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
       } else {
         if (showErrors) {
           throw Exception(
-              'Failed to load questions. Status code: ${response.statusCode}');
+            'Failed to load questions. Status code: ${response.statusCode}',
+          );
         }
       }
     } catch (e) {
@@ -190,8 +194,9 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     try {
       final cached = await _loadCachedQuestions();
       final ts = await _getCacheTimestamp();
-      final cacheAge =
-          DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(ts));
+      final cacheAge = DateTime.now().difference(
+        DateTime.fromMillisecondsSinceEpoch(ts),
+      );
 
       if (cached != null) {
         final List<String> pQuestions = List<String>.from(
@@ -219,7 +224,9 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
       final apiUrl = dotenv.env['API_URL'];
       if (apiUrl == null) throw Exception('API_URL not found in .env file');
 
-      final response = await http.get(Uri.parse('$apiUrl/assesments/questions'));
+      final response = await http.get(
+        Uri.parse('$apiUrl/assesments/questions'),
+      );
 
       if (response.statusCode == 200) {
         final decodedData = json.decode(response.body);
@@ -241,7 +248,8 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
         });
       } else {
         throw Exception(
-            'Failed to load questions. Status code: ${response.statusCode}');
+          'Failed to load questions. Status code: ${response.statusCode}',
+        );
       }
     } catch (e) {
       debugPrint('Error fetching questions: $e');
@@ -384,15 +392,21 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                 debugPrint(
                   'Auto-restart triggered by status ($status). Restarting quickly...',
                 );
-                Future.delayed(const Duration(milliseconds: 150)).then((_) {
+                
+                Future.delayed(const Duration(milliseconds: 150))
+                    .then((_) async { // 1. Tambah async
                   if (!mounted) return;
                   if (_isSessionActive &&
                       _speechEnabled &&
                       !_reinitInProgress) {
                     try {
-                      _startListeningSession();
+                      await _startListeningSession(); // 2. Tambah await
                     } catch (e) {
                       debugPrint('Auto-restart failed to start: $e');
+                      if (mounted) {
+                        await _handleClientErrorAndReinit(
+                            'auto-restart-failed: $e');
+                      }
                     }
                   }
                 });
@@ -407,13 +421,23 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
             });
           }
         },
+        
         onError: (error) async {
           debugPrint('Speech error callback: $error');
           final msg = error?.toString() ?? 'Unknown error';
+
+          final wasListening = _isListening;
           safeSetState(() {
             _text = 'Speech error: $msg';
             _statusText = 'error';
+            _isListening = false; // <-- DITAMBAHKAN
           });
+
+          try {
+            // Juga hentikan animasi di sini
+            _animController.stop();
+          } catch (_) {}
+          // --- AKHIR PERBAIKAN 1 ---
 
           final errStr = msg.toLowerCase();
           bool shouldRestart = false;
@@ -432,18 +456,35 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
             await _handleClientErrorAndReinit(errStr);
             return;
           }
-
           if (shouldRestart &&
               _autoRestartEnabled &&
               _isSessionActive &&
+              wasListening &&
+              !_navigatedForSession && 
               !_reinitInProgress) {
-            await Future.delayed(const Duration(milliseconds: 180));
-            if (!mounted) return;
-            if (_isSessionActive && _speechEnabled && !_reinitInProgress) {
-              try {
-                _startListeningSession();
-              } catch (e) {
-                debugPrint('Restart after error failed: $e');
+            
+            final now = DateTime.now();
+            final last =
+                _lastAutoRestart ?? DateTime.fromMillisecondsSinceEpoch(0);
+            
+            if (now.difference(last) > _autoRestartCooldown) {
+              _lastAutoRestart = now;
+              debugPrint(
+                'Auto-restart triggered by error ($msg). Restarting quickly...',
+              );
+
+              await Future.delayed(const Duration(milliseconds: 180));
+              if (!mounted) return;
+              if (_isSessionActive && _speechEnabled && !_reinitInProgress) {
+                try {
+                  await _startListeningSession(); // await
+                } catch (e) {
+                  debugPrint('Restart after error failed: $e');
+                  if (mounted) {
+                    await _handleClientErrorAndReinit(
+                        'error-restart-failed: $e');
+                  }
+                }
               }
             }
             return;
@@ -591,7 +632,9 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     _session++;
     final int localSession = _session;
 
-    debugPrint('Memulai listening session: $localSession (logical index: $_currentSessionIndex)');
+    debugPrint(
+      'Memulai listening session: $localSession (logical index: $_currentSessionIndex)',
+    );
 
     safeSetState(() {
       _isListening = true;
@@ -691,7 +734,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
         _isListening = false;
         _state = VoiceState.processing;
         _statusText = 'processing';
-        _awaitingFinalization = true; 
+        _awaitingFinalization = true;
       });
 
       try {
@@ -726,15 +769,12 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
       if (!mounted) return;
 
       if (_totalSessions > 1) {
-        _handleSessionFinal(toShow);
+        // --- PERUBAHAN 2a ---
+        await _handleSessionFinal(toShow);
       } else {
-        _navigateToReview(toShow);
-        safeSetState(() {
-          _state = VoiceState.initial;
-          _statusText = 'ready';
-          _text = '';
-          _isListening = false;
-        });
+        // --- PERUBAHAN 2b ---
+        // Panggil _navigateToReview dan hapus setState lama
+        await _navigateToReview(toShow);
       }
     }
   }
@@ -748,12 +788,12 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
         final bool isLast = _currentSessionIndex >= (_totalSessions - 1);
         return AlertDialog(
           backgroundColor: Colors.white,
-          title: Text('Hasil Transkrip Sesi ${_currentSessionIndex + 1} / $_totalSessions'),
+          title: Text(
+            'Hasil Transkrip Sesi ${_currentSessionIndex + 1} / $_totalSessions',
+          ),
           content: SizedBox(
             width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: SelectableText(transcript),
-            ),
+            child: SingleChildScrollView(child: SelectableText(transcript)),
           ),
           actions: [
             TextButton(
@@ -764,7 +804,9 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                   _statusText = 'ready';
                   _text = '';
                 });
-                Future.delayed(const Duration(milliseconds: 200)).then((_) async {
+                Future.delayed(const Duration(milliseconds: 200)).then((
+                  _,
+                ) async {
                   if (!mounted) return;
                   _lastPartial = '';
                   _fullBuffer = '';
@@ -779,7 +821,9 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
               child: const Text('Rekam Ulang'),
             ),
             ElevatedButton(
-              onPressed: () {
+              // --- PERUBAHAN 3 ---
+              // Jadikan onPressed async
+              onPressed: () async {
                 Navigator.of(ctx).pop();
                 // simpan
                 if (_sessionTranscripts.length > _currentSessionIndex) {
@@ -788,21 +832,16 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                   _sessionTranscripts.add(transcript);
                 }
 
-                final bool wasLast = _currentSessionIndex >= (_totalSessions - 1);
+                final bool wasLast =
+                    _currentSessionIndex >= (_totalSessions - 1);
                 if (wasLast) {
                   String combined = '';
                   for (final t in _sessionTranscripts) {
                     combined = _mergeWithOverlap(combined, t);
                   }
-                  _navigateToReview(combined);
-                  safeSetState(() {
-                    _state = VoiceState.initial;
-                    _statusText = 'ready';
-                    _text = '';
-                    _isListening = false;
-                    _currentSessionIndex = 0;
-                    _sessionTranscripts.clear();
-                  });
+
+                  // Panggil await _navigateToReview dan hapus setState lama
+                  await _navigateToReview(combined);
                 } else {
                   safeSetState(() {
                     _currentSessionIndex++;
@@ -810,7 +849,9 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                     _statusText = 'ready';
                     _text = '';
                   });
-                  Future.delayed(const Duration(milliseconds: 300)).then((_) async {
+                  Future.delayed(const Duration(milliseconds: 300)).then((
+                    _,
+                  ) async {
                     if (!mounted) return;
                     _lastPartial = '';
                     _fullBuffer = '';
@@ -831,10 +872,13 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     );
   }
 
-  void _navigateToReview(String reportText) {
+  // --- PERUBAHAN 1 ---
+  // Ganti seluruh fungsi _navigateToReview dengan yang ini
+  Future<void> _navigateToReview(String reportText) async {
     if (!mounted) return;
     try {
-      Navigator.of(context).push(
+      // 1. Tunggu (await) sampai pengguna kembali dari halaman VocareReport
+      await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => VocareReport(
             reportText: reportText,
@@ -843,10 +887,32 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
           ),
         ),
       );
+
+      // 2. Kode ini berjalan SETELAH pengguna kembali
+      debugPrint('User returned from VocareReport. Resetting session state.');
+
+      // 3. Reset semua state sesi ke kondisi awal
+      safeSetState(() {
+        _state = VoiceState.initial;
+        _statusText = 'ready';
+        _text = '';
+        _isListening = false;
+        _isSessionActive = false;
+        _currentSessionIndex = 0;
+        _sessionTranscripts.clear();
+        _fullBuffer = '';
+        _lastPartial = '';
+      });
+
+      // 4. Pastikan speech engine berhenti
+      try {
+        await _speech.stop();
+      } catch (_) {}
     } catch (e) {
       debugPrint('Navigate error: $e');
     }
   }
+  // --- AKHIR PERUBAHAN 1 ---
 
   Widget _buildQuestions() {
     Widget content;
@@ -996,7 +1062,9 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
           );
         } else {
           final bool isShowingPerawat = _activeQuestionSet == 'perawat';
-          final questions = isShowingPerawat ? _perawatQuestions : _pasienQuestions;
+          final questions = isShowingPerawat
+              ? _perawatQuestions
+              : _pasienQuestions;
           final title = isShowingPerawat
               ? 'Pertanyaan Untuk Perawat:'
               : 'Pertanyaan Untuk Pasien:';
@@ -1060,14 +1128,18 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                   const SizedBox(width: 8),
                   Expanded(
                     child: _buildToggleButton(
-                      isShowingPerawat ? 'Pertanyaan Pasien' : 'Pertanyaan Perawat',
+                      isShowingPerawat
+                          ? 'Pertanyaan Pasien'
+                          : 'Pertanyaan Perawat',
                       active: isShowingPerawat
                           ? _activeQuestionSet == 'pasien'
                           : _activeQuestionSet == 'perawat',
                       isRight: true,
                       onPressed: () {
                         safeSetState(() {
-                          _activeQuestionSet = isShowingPerawat ? 'pasien' : 'perawat';
+                          _activeQuestionSet = isShowingPerawat
+                              ? 'pasien'
+                              : 'perawat';
                         });
                       },
                     ),
@@ -1117,43 +1189,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     }
   }
 
-  Widget _buildPrimaryButton(String label, VoidCallback onPressed) {
-    return SizedBox(
-      height: 44,
-      child: ElevatedButton(
-        style: _commonButtonStyle(filled: true),
-        onPressed: onPressed,
-        child: Text(label),
-      ),
-    );
-  }
-
-  Widget _buildSecondaryButton(String label, VoidCallback onPressed) {
-    return SizedBox(
-      height: 44,
-      child: OutlinedButton(
-        style: _commonButtonStyle(filled: false),
-        onPressed: onPressed,
-        child: Text(label),
-      ),
-    );
-  }
-
-  Widget _buildTextButton(String label, VoidCallback onPressed) {
-    return SizedBox(
-      height: 44,
-      child: TextButton(
-        style: TextButton.styleFrom(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-          textStyle: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        onPressed: onPressed,
-        child: Text(label),
-      ),
-    );
-  }
-
   Widget _buildToggleButton(
     String label, {
     required bool active,
@@ -1171,9 +1206,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     final side = isRight
         ? null
         : const BorderSide(color: primaryColor, width: 1.2);
-    final elevation = active
-        ? 2.0
-        : 0.0;
+    final elevation = active ? 2.0 : 0.0;
 
     return SizedBox(
       height: 44,
@@ -1352,7 +1385,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
             ),
             const SizedBox(height: 8),
             SizedBox(
-              height: 200,
+              height: 160,
               child: Center(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),

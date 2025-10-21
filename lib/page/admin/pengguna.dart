@@ -114,7 +114,7 @@ class _PenggunaState extends State<Pengguna> {
             onRefresh: _refresh,
             child: ListView.separated(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.only(bottom: 24, top: 0),
+              padding: const EdgeInsets.only(bottom: 80, top: 0),
               itemCount: pengguna.length,
               separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (context, i) {

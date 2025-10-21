@@ -33,29 +33,18 @@ class _VoicePageLaporanState extends State<VoicePageLaporanTambahan>
 
   late final AnimationController _animController;
 
-  // dipilih berdasarkan locales yg tersedia
   String _chosenLocale = 'id_ID';
 
-  // partial terakhir tiap onResult
   String _lastPartial = '';
-  // gabungan semua partial selama long session
   String _fullBuffer = '';
-  // jika true, kita ingin auto-restart dan menangkap audio lebih panjang
   bool _keepListening = false;
 
-  // guard untuk mencegah re-init berulang
   bool _reinitInProgress = false;
 
-  // restart timer untuk proactively restart before engine timeout
   Timer? _restartTimer;
-  // konfigurasi: berapa sering kita restart (harus < listenFor)
-  // default: restart tiap 270 detik (4.5 menit)
   static const Duration _proactiveRestartInterval = Duration(seconds: 270);
 
-  // kontrol exponential backoff ketika gagal reinit
   int _reinitAttempts = 0;
-
-  // apakah ingin mencoba on-device recognition (set true jika device support)
   final bool _preferOnDevice = false;
 
   void safeSetState(VoidCallback fn) {
@@ -71,7 +60,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporanTambahan>
       duration: const Duration(milliseconds: 800),
     );
 
-    // inisialisasi speech setelah frame pertama — mencegah showDialog di initState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initSpeech();
     });

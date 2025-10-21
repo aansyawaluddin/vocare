@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
-import 'package:vocare/widgets/perawat/report_widgets.dart';
+import 'package:vocare/widgets/perawat/report_detail.dart';
 import 'package:vocare/widgets/perawat/report_utils.dart';
 
 class AssesmentsInap extends StatefulWidget {
@@ -238,17 +238,17 @@ class _AssesmentsInapState extends State<AssesmentsInap> {
         buildSkriningRisikoJatuhSection(extractedFields),
         const SizedBox(height: _sectionSpacing),
         buildStatusPsikososialSection(extractedFields),
-        const SizedBox(height: _sectionSpacing),
-        buildRencanaPerawatanSection(extractedFields),
-        const SizedBox(height: _sectionSpacing),
-        buildMasalahKeperawatanSection(extractedFields),
-        const SizedBox(height: _sectionSpacing),
-        RencanaAsuhanEditor(
-          initialRencana: _rencanaAsuhan,
-          editable: false,
-          onChanged: (updated) {},
-        ),
-        const SizedBox(height: _sectionSpacing),
+        // const SizedBox(height: _sectionSpacing),
+        // buildRencanaPerawatanSection(extractedFields),
+        // const SizedBox(height: _sectionSpacing),
+        // buildMasalahKeperawatanSection(extractedFields),
+        // const SizedBox(height: _sectionSpacing),
+        // RencanaAsuhanEditor(
+        //   initialRencana: _rencanaAsuhan,
+        //   editable: false,
+        //   onChanged: (updated) {},
+        // ),
+        // const SizedBox(height: _sectionSpacing),
       ],
     );
   }

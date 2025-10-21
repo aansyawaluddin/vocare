@@ -234,8 +234,6 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
                           ), // PasienInap/di dalamnya pakai LayoutBuilder; jangan wrap di scroll luar
                   ),
                 ),
-
-                const SizedBox(height: 24),
               ],
             );
           },
