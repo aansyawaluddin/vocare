@@ -35,7 +35,7 @@ class _VocareReport3State extends State<VocareReport3> {
   static const buttonUpdate = Color(0xFF0F4C81);
 
   Map<String, dynamic>? _cpptData;
-  int? _currentIntervensiId; // Menyimpan ID intervensi yang berhasil dibuat/diupdate
+  int? _currentIntervensiId;
   bool _isLoading = false;
   bool _isPostingLaporan = false;
   bool _isUpdatingCppt = false;
@@ -48,9 +48,8 @@ class _VocareReport3State extends State<VocareReport3> {
   late final TextEditingController _planController;
   late final TextEditingController _keteranganController;
   late final TextEditingController _dokterController;
-  
-  // === NEW: Controllers untuk Intervensi Manual ===
-  late final TextEditingController _implementasiController; 
+
+  late final TextEditingController _implementasiController;
   late final TextEditingController _evaluasiController;
 
   @override
@@ -63,16 +62,13 @@ class _VocareReport3State extends State<VocareReport3> {
     _planController = TextEditingController();
     _keteranganController = TextEditingController();
     _dokterController = TextEditingController();
-    
-    // NEW: Inisialisasi Intervensi Controllers
+
     _implementasiController = TextEditingController(text: '');
     _evaluasiController = TextEditingController(text: '');
 
-    // Inisialisasi ID intervensi awal (jika ada)
     _currentIntervensiId = widget.intervensiId;
 
     if (widget.cpptId > 0) _fetchCppt();
-    // _fetchIntervensi dihapus
   }
 
   @override
@@ -83,17 +79,13 @@ class _VocareReport3State extends State<VocareReport3> {
     _planController.dispose();
     _keteranganController.dispose();
     _dokterController.dispose();
-    _implementasiController.dispose(); // NEW: Dispose intervensi controllers
+    _implementasiController.dispose();
     _evaluasiController.dispose();
     super.dispose();
   }
 
   bool get _isBusy =>
-      _isLoading ||
-      _isPostingLaporan ||
-      _isUpdatingCppt ||
-      _isDeleting;
-      // _isLoadingIntervensi dihapus
+      _isLoading || _isPostingLaporan || _isUpdatingCppt || _isDeleting;
 
   String _baseUrlFromEnv() {
     return dotenv.env['API_BASE_URL'] ??
@@ -137,7 +129,7 @@ class _VocareReport3State extends State<VocareReport3> {
     for (int i = 0; i < items.length; i++) {
       buffer.write('${i + 1}. ${items[i]}');
       if (i < items.length - 1) {
-        buffer.write('\n'); // Adds a new line for the next item
+        buffer.write('\n');
       }
     }
 
@@ -203,8 +195,6 @@ class _VocareReport3State extends State<VocareReport3> {
     }
   }
 
-  // Future<void> _fetchIntervensi(int id) async { ... } // Dihapus
-
   // === NEW: _createOrUpdateIntervensi ===
   Future<int?> _createOrUpdateIntervensi({
     required int patientId,
@@ -214,10 +204,11 @@ class _VocareReport3State extends State<VocareReport3> {
   }) async {
     final baseUrl = _baseUrlFromEnv();
     final headers = _buildHeaders();
-    
+
     // Tentukan URL dan metode (POST untuk buat baru, PUT untuk update)
-    final bool isUpdate = _currentIntervensiId != null && _currentIntervensiId! > 0;
-    final String url = isUpdate 
+    final bool isUpdate =
+        _currentIntervensiId != null && _currentIntervensiId! > 0;
+    final String url = isUpdate
         ? '$baseUrl/intervensi/$_currentIntervensiId'
         : '$baseUrl/intervensi/';
     final String method = isUpdate ? 'PUT' : 'POST';
@@ -225,16 +216,14 @@ class _VocareReport3State extends State<VocareReport3> {
     final bodyMap = {
       'patient_id': patientId,
       'user_id': perawatId,
-      'implementasi': implementasi, // Gunakan input manual
-      'evaluasi': evaluasi,         // Gunakan input manual
-      // Anda mungkin perlu menambahkan field tambahan lain seperti cppt_id
-      // 'cppt_id': widget.cpptId,
+      'implementasi': implementasi,
+      'evaluasi': evaluasi,
     };
     final body = jsonEncode(bodyMap);
 
     try {
       if (kDebugMode) debugPrint('$method $url -> $body');
-      
+
       final http.Response resp;
       if (isUpdate) {
         resp = await http.put(Uri.parse(url), headers: headers, body: body);
@@ -242,19 +231,21 @@ class _VocareReport3State extends State<VocareReport3> {
         resp = await http.post(Uri.parse(url), headers: headers, body: body);
       }
 
-      if (kDebugMode) debugPrint('Intervensi response ${resp.statusCode}: ${resp.body}');
+      if (kDebugMode)
+        debugPrint('Intervensi response ${resp.statusCode}: ${resp.body}');
 
       if (resp.statusCode >= 200 && resp.statusCode < 300) {
-        if (resp.body.isEmpty) return _currentIntervensiId; // Jika PUT tanpa body
-        
+        if (resp.body.isEmpty) return _currentIntervensiId;
+
         final Map<String, dynamic> data = jsonDecode(resp.body);
         int? newId;
 
-        // Coba ambil ID dari berbagai lokasi respons
         newId = int.tryParse(data['id']?.toString() ?? '');
-        if (newId == null) newId = int.tryParse(data['intervensi_id']?.toString() ?? '');
-        if (newId == null && data['data'] is Map) newId = int.tryParse(data['data']['id']?.toString() ?? '');
-        
+        if (newId == null)
+          newId = int.tryParse(data['intervensi_id']?.toString() ?? '');
+        if (newId == null && data['data'] is Map)
+          newId = int.tryParse(data['data']['id']?.toString() ?? '');
+
         return newId ?? _currentIntervensiId;
       } else {
         String msg = resp.body;
@@ -271,30 +262,24 @@ class _VocareReport3State extends State<VocareReport3> {
     }
   }
 
-
   Future<void> _updateCppt() async {
     setState(() => _isUpdatingCppt = true);
 
     final url = '${_baseUrlFromEnv()}/cppt/${widget.cpptId}';
     final headers = _buildHeaders();
 
-    // --- MODIFICATION: Convert numbered list back to comma-separated string ---
     String assessmentToSend = _assessmentController.text;
-    // Check if the text is in the numbered list format
     if (RegExp(r'^\d+\.').hasMatch(assessmentToSend)) {
-      // Convert it back to a simple comma-separated string
       List<String> items = assessmentToSend.split('\n').map((line) {
-        // Remove the numbering (e.g., "1. ")
         return line.replaceAll(RegExp(r'^\d+\.\s*'), '').trim();
       }).toList();
       assessmentToSend = items.join(', ');
     }
-    // -------------------------------------------------------------------------
 
     final body = jsonEncode({
       'subjective': _subjectiveController.text,
       'objective': _objectiveController.text,
-      'assessment': assessmentToSend, // Use the converted string
+      'assessment': assessmentToSend,
       'plan': _planController.text,
       'keterangan': _keteranganController.text,
       'dokter': _dokterController.text,
@@ -344,9 +329,9 @@ class _VocareReport3State extends State<VocareReport3> {
 
   Future<void> _postLaporan() async {
     setState(() => _isPostingLaporan = true);
-    
+
     int? intervensiIdToSend = _currentIntervensiId;
-    
+
     // 1. BUAT/UPDATE INTERVENSI DULU
     try {
       final newIntervensiId = await _createOrUpdateIntervensi(
@@ -366,7 +351,9 @@ class _VocareReport3State extends State<VocareReport3> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Intervensi berhasil ${(_currentIntervensiId != null ? 'diperbarui' : 'dibuat')}!'),
+          content: Text(
+            'Intervensi berhasil ${(_currentIntervensiId != null ? 'diperbarui' : 'dibuat')}!',
+          ),
           backgroundColor: Colors.orange,
         ),
       );
@@ -374,14 +361,16 @@ class _VocareReport3State extends State<VocareReport3> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Peringatan: Gagal membuat/mengupdate intervensi. Laporan mungkin tidak terhubung: $e'),
+            content: Text(
+              'Peringatan: Gagal membuat/mengupdate intervensi. Laporan mungkin tidak terhubung: $e',
+            ),
             backgroundColor: Colors.orange,
           ),
         );
       }
       if (kDebugMode) debugPrint('Create/Update intervensi failed: $e');
     }
-    
+
     // Ambil ID terbaru (jika ada)
     final int? cpptIdToSend = (widget.cpptId != 0)
         ? widget.cpptId
@@ -396,11 +385,13 @@ class _VocareReport3State extends State<VocareReport3> {
       return;
     }
     if (intervensiIdToSend == null || intervensiIdToSend == 0) {
-       if (mounted) _showErrorSnackBar("Gagal: Intervensi ID tidak tersedia. Harap isi Intervensi.");
-       if (mounted) setState(() => _isPostingLaporan = false);
-       return;
+      if (mounted)
+        _showErrorSnackBar(
+          "Gagal: Intervensi ID tidak tersedia. Harap isi Intervensi.",
+        );
+      if (mounted) setState(() => _isPostingLaporan = false);
+      return;
     }
-
 
     if (kDebugMode) {
       debugPrint(
@@ -419,7 +410,7 @@ class _VocareReport3State extends State<VocareReport3> {
       'perawat_id': widget.perawatId,
       'query': widget.query,
     };
-    
+
     final body = jsonEncode(bodyMap);
 
     try {
@@ -477,14 +468,20 @@ class _VocareReport3State extends State<VocareReport3> {
       _showErrorSnackBar('cppt_id tidak tersedia. Tidak dapat menghapus.');
       return;
     }
+    if (widget.patientId == 0) {
+      _showErrorSnackBar(
+        'patient_id tidak tersedia. Pembatalan penghapusan Pasien.',
+      );
+      return;
+    }
 
     final confirm = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        title: const Text('Konfirmasi Hapus CPPT'),
+        title: const Text('Konfirmasi Hapus CPPT & Pasien'),
         content: const Text(
-          'Apakah Anda yakin ingin menghapus CPPT ini? Tindakan ini tidak dapat dibatalkan.',
+          '⚠️ Apakah Anda yakin ingin menghapus CPPT DAN DATA PASIEN terkait? Tindakan ini tidak dapat dibatalkan.',
         ),
         actions: [
           TextButton(
@@ -493,7 +490,7 @@ class _VocareReport3State extends State<VocareReport3> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Hapus'),
+            child: const Text('Hapus Permanen'),
           ),
         ],
       ),
@@ -503,28 +500,56 @@ class _VocareReport3State extends State<VocareReport3> {
 
     setState(() => _isDeleting = true);
 
-    final url = '${_baseUrlFromEnv()}/cppt/${widget.cpptId}';
+    final cpptUrl = '${_baseUrlFromEnv()}/cppt/${widget.cpptId}';
+    final patientUrl = '${_baseUrlFromEnv()}/patients/${widget.patientId}';
+    final headers = _buildHeaders();
+
     try {
-      if (kDebugMode) debugPrint('DELETE $url');
-      final resp = await http.delete(Uri.parse(url), headers: _buildHeaders());
+      // 1. HAPUS CPPT
+      if (kDebugMode) debugPrint('DELETE CPPT $cpptUrl');
+      final respCppt = await http.delete(Uri.parse(cpptUrl), headers: headers);
       if (!mounted) return;
 
-      if (resp.statusCode >= 200 && resp.statusCode < 300) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('CPPT berhasil dihapus.'),
-            backgroundColor: Colors.green,
-          ),
+      if (respCppt.statusCode >= 200 && respCppt.statusCode < 300) {
+        // 2. CPPT BERHASIL DIHAPUS, LANJUT HAPUS PASIEN
+        if (kDebugMode) debugPrint('DELETE PATIENT $patientUrl');
+        final respPatient = await http.delete(
+          Uri.parse(patientUrl),
+          headers: headers,
         );
-        Navigator.of(context).pop();
+        if (!mounted) return;
+
+        if (respPatient.statusCode >= 200 && respPatient.statusCode < 300) {
+          // Keduanya berhasil dihapus
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('CPPT dan Pasien berhasil dihapus.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.of(context).pop();
+        } else {
+          // Gagal menghapus pasien
+          String msg = respPatient.body;
+          try {
+            final parsed = jsonDecode(respPatient.body);
+            if (parsed is Map && parsed['message'] != null)
+              msg = parsed['message'].toString();
+          } catch (_) {}
+          // Beri peringatan karena CPPT sudah terhapus
+          throw Exception(
+            'CPPT terhapus, tetapi Gagal menghapus Pasien (${respPatient.statusCode}): $msg',
+          );
+        }
       } else {
-        String msg = resp.body;
+        // Gagal menghapus CPPT
+        String msg = respCppt.body;
         try {
-          final parsed = jsonDecode(resp.body);
+          final parsed = jsonDecode(respCppt.body);
           if (parsed is Map && parsed['message'] != null)
             msg = parsed['message'].toString();
         } catch (_) {}
-        throw Exception('Gagal menghapus CPPT (${resp.statusCode}): $msg');
+        throw Exception('Gagal menghapus CPPT (${respCppt.statusCode}): $msg');
       }
     } catch (e) {
       if (mounted) _showErrorSnackBar('Gagal menghapus: $e');
@@ -660,7 +685,10 @@ class _VocareReport3State extends State<VocareReport3> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Implementasi', style: TextStyle(fontWeight: FontWeight.w600)),
+          const Text(
+            'Implementasi',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 6),
           buildEditableField(_implementasiController),
           const SizedBox(height: 10),
@@ -669,8 +697,14 @@ class _VocareReport3State extends State<VocareReport3> {
           buildEditableField(_evaluasiController),
           const SizedBox(height: 10),
           _currentIntervensiId != null
-              ? Text('Intervensi ID: ${_currentIntervensiId!}', style: const TextStyle(fontSize: 12, color: Colors.green))
-              : const Text('Intervensi baru akan dibuat saat mengirim Laporan.', style: TextStyle(fontSize: 12, color: Colors.orange)),
+              ? Text(
+                  'Intervensi ID: ${_currentIntervensiId!}',
+                  style: const TextStyle(fontSize: 12, color: Colors.green),
+                )
+              : const Text(
+                  'Intervensi baru akan dibuat saat mengirim Laporan.',
+                  style: TextStyle(fontSize: 12, color: Colors.orange),
+                ),
         ],
       );
     }
@@ -719,9 +753,12 @@ class _VocareReport3State extends State<VocareReport3> {
               child: buildSignature(d['signature']?.toString()),
             ),
           const SizedBox(height: 10),
-          
+
           // NEW: Intervensi Manual Input Section
-          section('Intervensi (Implementasi & Evaluasi)', child: intervensiEditorSection()),
+          section(
+            'Intervensi (Implementasi & Evaluasi)',
+            child: intervensiEditorSection(),
+          ),
           const SizedBox(height: 10),
         ],
       ),
@@ -821,7 +858,9 @@ class _VocareReport3State extends State<VocareReport3> {
                     child: SizedBox(
                       height: 56,
                       child: ElevatedButton.icon(
-                        onPressed: (_isBusy) ? null : _postLaporan, // _postLaporan sekarang menangani Intervensi POST/PUT
+                        onPressed: (_isBusy)
+                            ? null
+                            : _postLaporan, // _postLaporan sekarang menangani Intervensi POST/PUT
                         icon: _isPostingLaporan
                             ? Container(
                                 width: 24,

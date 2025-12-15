@@ -161,7 +161,7 @@ class DetaiRiwayatPage extends StatelessWidget {
         backgroundColor: background,
         centerTitle: true,
         title: const Text(
-          'Detail Laporan',
+          'Detail ASKEP',
           style: TextStyle(
             color: Color(0xFF083B74),
             fontWeight: FontWeight.w700,

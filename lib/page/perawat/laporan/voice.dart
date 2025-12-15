@@ -28,6 +28,7 @@ class VoicePageLaporan extends StatefulWidget {
 class _VoicePageLaporanState extends State<VoicePageLaporan>
     with SingleTickerProviderStateMixin {
   final SpeechToText _speech = SpeechToText();
+
   bool _speechEnabled = false;
   bool _isListening = false;
   String _text = '';
@@ -46,8 +47,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
   Timer? _restartTimer;
   int _reinitAttempts = 0;
   final bool _preferOnDevice = false;
-  DateTime? _lastAutoRestart;
-  static const Duration _autoRestartCooldown = Duration(milliseconds: 400);
 
   DataState _dataState = DataState.loading;
   String? _errorMessage;
@@ -75,14 +74,15 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     "Siapa pendamping pasien saat datang?",
     "Kelas pelayanan apa yang digunakan pasien?",
     "Apa sumber data anamnesa yang digunakan?",
+    "Keluhan yang dirasakan pasien?",
   ];
 
   bool _showInitialQuestions = true;
   bool _awaitingFinalization = false;
+  bool _isRestarting = false;
 
-  // --- MULTI-SESSION CONFIG ---
-  final int _totalSessions = 3; // ubah sesuai kebutuhan
-  int _currentSessionIndex = 0; // 0-based index
+  final int _totalSessions = 3;
+  int _currentSessionIndex = 0;
   final List<String> _sessionTranscripts = [];
 
   void safeSetState(VoidCallback fn) {
@@ -98,10 +98,46 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
       duration: const Duration(milliseconds: 800),
     );
 
+    debugPrint('VoicePageLaporan initState() - Melakukan RESET penuh');
+
+    _autoRestartEnabled = true;
+    _isRestarting = false;
+    _isSessionActive = false;
+    _session = 0;
+    _currentSessionIndex = 0;
+    _sessionTranscripts.clear();
+    _fullBuffer = '';
+    _lastPartial = '';
+    _state = VoiceState.initial;
+    _text = ''; 
+    _statusText = ''; 
+    _isListening = false;
+    _navigatedForSession = false;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initSpeech();
       _fetchQuestions();
     });
+  }
+
+  @override
+  void dispose() {
+    debugPrint('VoicePageLaporan dispose()');
+
+    _isSessionActive = false;
+    _autoRestartEnabled = false;
+    _cancelRestartTimer();
+    _isRestarting = false;
+
+    try {
+      _speech.cancel();
+      debugPrint('VoicePageLaporan dispose() - _speech.cancel() called');
+    } catch (e) {
+      debugPrint('Error during _speech.cancel() in dispose: $e');
+    }
+
+    _animController.dispose();
+    super.dispose();
   }
 
   Future<Map<String, dynamic>?> _loadCachedQuestions() async {
@@ -269,19 +305,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     }
   }
 
-  @override
-  void dispose() {
-    _cancelRestartTimer();
-    try {
-      _speech.cancel();
-    } catch (_) {}
-    try {
-      _speech.stop();
-    } catch (_) {}
-    _animController.dispose();
-    super.dispose();
-  }
-
   Future<bool> _ensureMicrophonePermission() async {
     final status = await Permission.microphone.status;
     debugPrint('Current microphone permission status: $status');
@@ -344,6 +367,11 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     try {
       bool available = await _speech.initialize(
         onStatus: (status) async {
+          if (!mounted) {
+            debugPrint('onStatus received by unmounted widget: $status');
+            return;
+          }
+
           debugPrint('Speech status callback: $status');
           final s = (status ?? '').toLowerCase();
 
@@ -374,44 +402,43 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
               _animController.stop();
             } catch (_) {}
 
+            if (_lastPartial.isNotEmpty) {
+              debugPrint(
+                'onStatus fallback merge: merging lastPartial into fullBuffer (length ${_lastPartial.length})',
+              );
+              _fullBuffer = _mergeWithOverlap(_fullBuffer, _lastPartial);
+              _lastPartial = '';
+            }
+
             if (_autoRestartEnabled &&
                 wasListening &&
                 _isSessionActive &&
                 !_navigatedForSession &&
                 _speechEnabled &&
-                !_reinitInProgress) {
-              final now = DateTime.now();
-              final last =
-                  _lastAutoRestart ?? DateTime.fromMillisecondsSinceEpoch(0);
-              if (now.difference(last) > _autoRestartCooldown) {
-                _lastAutoRestart = now;
-                if (_lastPartial.isNotEmpty) {
-                  _fullBuffer = _mergeWithOverlap(_fullBuffer, _lastPartial);
-                  _lastPartial = '';
+                !_reinitInProgress &&
+                !_isRestarting) {
+              _isRestarting = true;
+
+              debugPrint(
+                'Auto-restart triggered by status ($status). Restarting quickly...',
+              );
+              Future.delayed(const Duration(milliseconds: 150)).then((_) {
+                if (!mounted) {
+                  _isRestarting = false;
+                  return;
                 }
-                debugPrint(
-                  'Auto-restart triggered by status ($status). Restarting quickly...',
-                );
-                
-                Future.delayed(const Duration(milliseconds: 150))
-                    .then((_) async { // 1. Tambah async
-                  if (!mounted) return;
-                  if (_isSessionActive &&
-                      _speechEnabled &&
-                      !_reinitInProgress) {
-                    try {
-                      await _startListeningSession(); // 2. Tambah await
-                    } catch (e) {
-                      debugPrint('Auto-restart failed to start: $e');
-                      if (mounted) {
-                        await _handleClientErrorAndReinit(
-                            'auto-restart-failed: $e');
-                      }
-                    }
+                if (_isSessionActive && _speechEnabled && !_reinitInProgress) {
+                  try {
+                    _startListeningSession();
+                  } catch (e) {
+                    debugPrint('Auto-restart failed to start: $e');
+                    _isRestarting = false;
                   }
-                });
-                return;
-              }
+                } else {
+                  _isRestarting = false;
+                }
+              });
+              return;
             }
 
             safeSetState(() {
@@ -421,23 +448,18 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
             });
           }
         },
-        
         onError: (error) async {
+          if (!mounted) {
+            debugPrint('onError received by unmounted widget: $error');
+            return;
+          }
+
           debugPrint('Speech error callback: $error');
           final msg = error?.toString() ?? 'Unknown error';
-
-          final wasListening = _isListening;
           safeSetState(() {
             _text = 'Speech error: $msg';
             _statusText = 'error';
-            _isListening = false; // <-- DITAMBAHKAN
           });
-
-          try {
-            // Juga hentikan animasi di sini
-            _animController.stop();
-          } catch (_) {}
-          // --- AKHIR PERBAIKAN 1 ---
 
           final errStr = msg.toLowerCase();
           bool shouldRestart = false;
@@ -456,35 +478,18 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
             await _handleClientErrorAndReinit(errStr);
             return;
           }
+
           if (shouldRestart &&
               _autoRestartEnabled &&
               _isSessionActive &&
-              wasListening &&
-              !_navigatedForSession && 
               !_reinitInProgress) {
-            
-            final now = DateTime.now();
-            final last =
-                _lastAutoRestart ?? DateTime.fromMillisecondsSinceEpoch(0);
-            
-            if (now.difference(last) > _autoRestartCooldown) {
-              _lastAutoRestart = now;
-              debugPrint(
-                'Auto-restart triggered by error ($msg). Restarting quickly...',
-              );
-
-              await Future.delayed(const Duration(milliseconds: 180));
-              if (!mounted) return;
-              if (_isSessionActive && _speechEnabled && !_reinitInProgress) {
-                try {
-                  await _startListeningSession(); // await
-                } catch (e) {
-                  debugPrint('Restart after error failed: $e');
-                  if (mounted) {
-                    await _handleClientErrorAndReinit(
-                        'error-restart-failed: $e');
-                  }
-                }
+            await Future.delayed(const Duration(milliseconds: 180));
+            if (!mounted) return;
+            if (_isSessionActive && _speechEnabled && !_reinitInProgress) {
+              try {
+                _startListeningSession();
+              } catch (e) {
+                debugPrint('Restart after error failed: $e');
               }
             }
             return;
@@ -628,9 +633,14 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
   }
 
   Future<void> _startListeningSession() async {
-    if (!_speechEnabled || !_isSessionActive) return;
+    if (!_speechEnabled || !_isSessionActive) {
+      _isRestarting = false;
+      return;
+    }
     _session++;
     final int localSession = _session;
+
+    _isRestarting = false;
 
     debugPrint(
       'Memulai listening session: $localSession (logical index: $_currentSessionIndex)',
@@ -650,16 +660,34 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     } catch (_) {}
 
     try {
-      await _speech.cancel();
+      if (_speech.isListening) {
+        try {
+          debugPrint('speech isListening -> calling stop() before listen');
+          await _speech.stop();
+        } catch (e) {
+          debugPrint('stop() failed (fallback to cancel): $e');
+          try {
+            await _speech.cancel();
+          } catch (_) {}
+        }
+      } else {
+        try {
+          await _speech.cancel();
+        } catch (e) {
+          debugPrint('cancel() failed: $e');
+        }
+      }
     } catch (e) {
-      debugPrint('cancel() failed: $e');
+      debugPrint('Exception while attempting to stop/cancel before listen: $e');
     }
-    await Future.delayed(const Duration(milliseconds: 180));
+
+    await Future.delayed(const Duration(milliseconds: 400));
 
     try {
       await _speech.listen(
         onResult: (result) async {
-          if (localSession != _session) return;
+          // PERBAIKAN: Penjaga mounted dan session
+          if (!mounted || localSession != _session) return;
 
           _lastPartial = result.recognizedWords;
           safeSetState(() {
@@ -667,6 +695,9 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
           });
 
           if (result.finalResult == true) {
+            debugPrint(
+              'onResult: finalResult true (len=${_lastPartial.length})',
+            );
             final merged = _mergeWithOverlap(_fullBuffer, _lastPartial);
             _fullBuffer = merged;
             _lastPartial = '';
@@ -687,7 +718,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
       _cancelRestartTimer();
     } catch (e, st) {
       debugPrint('Exception saat _speech.listen: $e\n$st');
-      if (_isSessionActive) {
+      if (mounted && _isSessionActive) {
         await _handleClientErrorAndReinit('exception_when_listen: $e');
       }
     }
@@ -716,9 +747,11 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
       return;
     }
 
-    if (!_isListening) {
+    if (!_isListening && _state != VoiceState.listening) {
+      // Cek ganda
       _isSessionActive = true;
       _lastPartial = '';
+      _fullBuffer = ''; // Pastikan buffer bersih di awal
       _navigatedForSession = false;
       _reinitAttempts = 0;
       if (_currentSessionIndex == 0 && _sessionTranscripts.isEmpty) {
@@ -752,12 +785,11 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
 
       _cancelRestartTimer();
 
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 300));
 
       final captured = (_fullBuffer + ' ' + _lastPartial).trim();
       final finalMerged = _mergeWithOverlap('', captured);
 
-      // reset buffers AFTER capture
       _fullBuffer = '';
       _lastPartial = '';
       _awaitingFinalization = false;
@@ -769,12 +801,15 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
       if (!mounted) return;
 
       if (_totalSessions > 1) {
-        // --- PERUBAHAN 2a ---
-        await _handleSessionFinal(toShow);
+        _handleSessionFinal(toShow);
       } else {
-        // --- PERUBAHAN 2b ---
-        // Panggil _navigateToReview dan hapus setState lama
-        await _navigateToReview(toShow);
+        _navigateToReview(toShow);
+        safeSetState(() {
+          _state = VoiceState.initial;
+          _statusText = 'ready';
+          _text = '';
+          _isListening = false;
+        });
       }
     }
   }
@@ -821,9 +856,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
               child: const Text('Rekam Ulang'),
             ),
             ElevatedButton(
-              // --- PERUBAHAN 3 ---
-              // Jadikan onPressed async
-              onPressed: () async {
+              onPressed: () {
                 Navigator.of(ctx).pop();
                 // simpan
                 if (_sessionTranscripts.length > _currentSessionIndex) {
@@ -839,9 +872,15 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                   for (final t in _sessionTranscripts) {
                     combined = _mergeWithOverlap(combined, t);
                   }
-
-                  // Panggil await _navigateToReview dan hapus setState lama
-                  await _navigateToReview(combined);
+                  _navigateToReview(combined);
+                  safeSetState(() {
+                    _state = VoiceState.initial;
+                    _statusText = 'ready';
+                    _text = '';
+                    _isListening = false;
+                    _currentSessionIndex = 0;
+                    _sessionTranscripts.clear();
+                  });
                 } else {
                   safeSetState(() {
                     _currentSessionIndex++;
@@ -872,13 +911,10 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     );
   }
 
-  // --- PERUBAHAN 1 ---
-  // Ganti seluruh fungsi _navigateToReview dengan yang ini
-  Future<void> _navigateToReview(String reportText) async {
+  void _navigateToReview(String reportText) {
     if (!mounted) return;
     try {
-      // 1. Tunggu (await) sampai pengguna kembali dari halaman VocareReport
-      await Navigator.of(context).push(
+      Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => VocareReport(
             reportText: reportText,
@@ -887,32 +923,10 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
           ),
         ),
       );
-
-      // 2. Kode ini berjalan SETELAH pengguna kembali
-      debugPrint('User returned from VocareReport. Resetting session state.');
-
-      // 3. Reset semua state sesi ke kondisi awal
-      safeSetState(() {
-        _state = VoiceState.initial;
-        _statusText = 'ready';
-        _text = '';
-        _isListening = false;
-        _isSessionActive = false;
-        _currentSessionIndex = 0;
-        _sessionTranscripts.clear();
-        _fullBuffer = '';
-        _lastPartial = '';
-      });
-
-      // 4. Pastikan speech engine berhenti
-      try {
-        await _speech.stop();
-      } catch (_) {}
     } catch (e) {
       debugPrint('Navigate error: $e');
     }
   }
-  // --- AKHIR PERUBAHAN 1 ---
 
   Widget _buildQuestions() {
     Widget content;
@@ -1121,7 +1135,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                       onPressed: () {
                         safeSetState(() {
                           _showInitialQuestions = true;
-                        });
+                        });                                                      
                       },
                     ),
                   ),
@@ -1315,7 +1329,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                     ),
                   ),
                 ),
-                // 🔍 Opsional: info saat engine sedang restart
                 if (!_isListening && _isSessionActive)
                   const Padding(
                     padding: EdgeInsets.only(top: 8),
@@ -1403,10 +1416,10 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                 _isListening
                     ? 'Mendengarkan...'
                     : (_statusText == 'ready'
-                        ? 'Siap Merekam'
-                        : _isSessionActive
-                            ? 'Sesi aktif – lanjutkan berbicara'
-                            : 'Status: $_statusText'),
+                          ? 'Siap Merekam'
+                          : _isSessionActive
+                          ? 'Sesi aktif – lanjutkan berbicara'
+                          : 'Status: $_statusText'),
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 14),
               ),

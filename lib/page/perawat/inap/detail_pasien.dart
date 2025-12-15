@@ -154,7 +154,7 @@ class PatientDetailPage extends StatelessWidget {
                     );
                   }
                 },
-                child: const Text('Lihat Laporan'),
+                child: const Text('Lihat ASKEP'),
               ),
             ],
           ),

@@ -50,9 +50,7 @@ class _CpptListPageState extends State<CpptListPage> {
     });
 
     // API call is modified to fetch all CPPTs and then filter locally
-    final url = Uri.parse(
-      '${_getBaseUrl()}/cppt', 
-    );
+    final url = Uri.parse('${_getBaseUrl()}/cppt');
 
     try {
       final response = await http.get(url, headers: _getAuthHeaders());
@@ -162,45 +160,66 @@ class CpptDetailCard extends StatelessWidget {
       return iso;
     }
   }
+  
+  String _detectShiftFromTime() {
+    final tanggal = cpptData['tanggal'];
+    if (tanggal == null) return 'Tidak diketahui';
 
-  // --- FUNGSI BARU DITAMBAHKAN DI SINI ---
+    try {
+      final dt = DateTime.parse(tanggal.toString()).toLocal();
+      final h = dt.hour;
+      if (h >= 6 && h < 12) return 'Pagi (Shift 1)';
+      if (h >= 12 && h < 18) return 'Siang (Shift 2)';
+      return 'Malam (Shift 3)';
+    } catch (_) {
+      return 'Tidak diketahui';
+    }
+  }
+
+  Color _colorForShiftLabel(String shiftLabel) {
+    final s = shiftLabel.toLowerCase();
+    if (s.contains('pagi') || s.contains('shift 1')) {
+      return const Color(0xFF3B82F6); // biru
+    }
+    if (s.contains('siang') || s.contains('shift 2')) {
+      return const Color(0xFF10B981); // hijau
+    }
+    if (s.contains('malam') || s.contains('shift 3')) {
+      return const Color(0xFFF59E0B); // jingga
+    }
+    return const Color(0xFF6B7280); // abu-abu untuk unknown
+  }
+
   String _formatAssessment(String? rawText) {
     if (rawText == null || rawText.isEmpty) {
       return 'Tidak ada data.';
     }
-    
-    // Menghapus kurung kurawal, kutip, dan kurung siku
+
     String cleanedText = rawText.replaceAll(RegExp(r'[{}"[\]]'), '');
 
-    // Memisahkan item berdasarkan koma
-    List<String> items = cleanedText.split(',')
+    List<String> items = cleanedText
+        .split(',')
         .map((item) => item.trim())
         .where((item) => item.isNotEmpty)
         .toList();
 
     if (items.isEmpty) {
-      return cleanedText; 
+      return cleanedText;
     }
 
-    // Membuat daftar bernomor
     StringBuffer buffer = StringBuffer();
     for (int i = 0; i < items.length; i++) {
       buffer.write('${i + 1}. ${items[i]}');
-      if (i < items.length - 1) {
-        buffer.write('\n'); // Tambahkan baris baru
-      }
+      if (i < items.length - 1) buffer.write('\n');
     }
     return buffer.toString();
   }
-  // ------------------------------------
 
   Widget _buildDetailSection(String title, String? content) {
-    // --- PENYESUAIAN KONTEN ASSESSMENT ---
-    final String displayContent = title == "Assessment" 
+    final String displayContent = title == "Assessment"
         ? _formatAssessment(content)
         : (content != null && content.isNotEmpty ? content : 'Tidak ada data.');
-    // ------------------------------------
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -214,7 +233,7 @@ class CpptDetailCard extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          displayContent, // Gunakan konten yang sudah diformat
+          displayContent,
           style: TextStyle(
             fontSize: 14,
             color: Colors.black.withOpacity(0.7),
@@ -228,6 +247,9 @@ class CpptDetailCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final shiftLabel = _detectShiftFromTime();
+    final shiftColor = _colorForShiftLabel(shiftLabel);
+
     return Card(
       color: Colors.white,
       margin: const EdgeInsets.only(bottom: 16),
@@ -238,20 +260,38 @@ class CpptDetailCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF082B54).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                formatDate(cpptData['tanggal']),
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF082B54),
-                  fontSize: 14,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Chip(
+                  label: Text(
+                    shiftLabel,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  backgroundColor: shiftColor,
                 ),
-              ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: shiftColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    formatDate(cpptData['tanggal']),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: shiftColor,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const Divider(height: 24),
             _buildDetailSection("Subjective", cpptData['subjective']),

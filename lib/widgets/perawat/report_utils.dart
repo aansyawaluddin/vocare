@@ -333,10 +333,9 @@ Map<String, dynamic> buildExtractedFieldsMap({
       getFirstNonNull(asesmen, ['alergi']) ??
       getFirstNonNull(riwayatMap, ['alergi']) ?? // Ditambahkan
       getFirstNonNull(alergiMap, ['obat', 'makanan', 'alergi']);
-  
+
   // Perbaikan: Tipe diubah menjadi String? dan hapus ?? '-'
-  final String? alergiCombined =
-      cleanAndFormatText(alergiRaw?.toString());
+  final String? alergiCombined = cleanAndFormatText(alergiRaw?.toString());
 
   final kondisiSosialRaw = getCaseInsensitive(psikososial, 'kondisi_sosial');
   final Map<String, dynamic> kondisiSosial =
@@ -407,6 +406,7 @@ Map<String, dynamic> buildExtractedFieldsMap({
       'waktu_kunjungan',
     ]),
     'poli': getFirstNonNull(kunjungan, [
+      'ruangan',
       'ruang', // Ditambahkan
       'tujuan_poli',
       'tujuan',
@@ -430,7 +430,11 @@ Map<String, dynamic> buildExtractedFieldsMap({
       'sumber_data',
     ]),
     'rujukan': getFirstNonNull(kunjungan, ['rujukan', 'asal_rujukan']),
-    'cara_masuk': getFirstNonNull(kunjungan, ['cara_masuk', 'sarana_masuk']),
+    'cara_masuk': getFirstNonNull(kunjungan, [
+      'cara_masuk',
+      'sarana_masuk',
+      'transportasi',
+    ]),
 
     // KELUHAN UTAMA
     'keluhan_utama':
@@ -572,13 +576,12 @@ Map<String, dynamic> buildExtractedFieldsMap({
     // RENCANA PERAWATAN (Bagian 11)
     'edukasi_topik': getFirstNonNull(edukasi, ['topik']), // Ditambahkan
     'edukasi_keterangan': getFirstNonNull(edukasi, [
-       'keterangan',
+      'keterangan',
     ]), // Ditambahkan
     'home_care': getFirstNonNull(rencana, ['home_care']),
     'rencana_keterangan': getFirstNonNull(rencana, [
-       'keterangan',
+      'keterangan',
     ]), // Ditambahkan (untuk rujukan)
-
     // MASALAH KEPERAWATAN
     'masalah_keperawatan_list': getFirstNonNull(asesmen, [
       'masalah_keperawatan',

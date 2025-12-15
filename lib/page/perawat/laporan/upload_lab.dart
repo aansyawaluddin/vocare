@@ -8,7 +8,7 @@ class UploadLab extends StatefulWidget {
   final Future<void> Function(PlatformFile file)? onSave;
   final User user;
 
-  const UploadLab({super.key, this.onSave, required this.user });
+  const UploadLab({super.key, this.onSave, required this.user});
 
   @override
   State<UploadLab> createState() => _UploadLabState();
@@ -135,7 +135,7 @@ class _UploadLabState extends State<UploadLab> {
             const SizedBox(height: 12),
 
             Text(
-              'Upload Hasil Lab',
+              'Upload hasil penunjang',
               style: GoogleFonts.poppins(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -203,14 +203,16 @@ class _UploadLabState extends State<UploadLab> {
                         if (!_isSaving) {
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (context) => VoicePageLaporan(user: widget.user),
+                              builder: (context) =>
+                                  VoicePageLaporan(user: widget.user),
                             ),
                           );
                         }
                       } else {
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (context) => VoicePageLaporan(user: widget.user),
+                            builder: (context) =>
+                                VoicePageLaporan(user: widget.user),
                           ),
                         );
                       }
