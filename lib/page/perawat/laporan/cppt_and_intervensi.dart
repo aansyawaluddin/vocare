@@ -332,7 +332,6 @@ class _VocareReport3State extends State<VocareReport3> {
 
     int? intervensiIdToSend = _currentIntervensiId;
 
-    // 1. BUAT/UPDATE INTERVENSI DULU
     try {
       final newIntervensiId = await _createOrUpdateIntervensi(
         patientId: widget.patientId,
@@ -777,7 +776,10 @@ class _VocareReport3State extends State<VocareReport3> {
               'Vocare Report',
               style: TextStyle(fontSize: 20, color: Color(0xFF093275)),
             ),
-            backgroundColor: const Color(0xFFD7E2FD),
+            backgroundColor: background,
+            flexibleSpace: Container(
+              decoration: const BoxDecoration(color: background),
+            ),
           ),
           body: SafeArea(child: _buildBody()),
           bottomNavigationBar: SafeArea(
@@ -860,7 +862,7 @@ class _VocareReport3State extends State<VocareReport3> {
                       child: ElevatedButton.icon(
                         onPressed: (_isBusy)
                             ? null
-                            : _postLaporan, // _postLaporan sekarang menangani Intervensi POST/PUT
+                            : _postLaporan,
                         icon: _isPostingLaporan
                             ? Container(
                                 width: 24,

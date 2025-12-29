@@ -12,6 +12,10 @@ class IntervensiInap extends StatefulWidget {
   final String query; // Query awal tetap dibawa untuk referensi
   final int cpptId;
 
+  // Tambahkan parameter optional untuk prefill
+  final String? initialImplementasi;
+  final String? initialEvaluasi;
+
   const IntervensiInap({
     super.key,
     required this.token,
@@ -19,6 +23,8 @@ class IntervensiInap extends StatefulWidget {
     required this.perawatId,
     required this.query,
     required this.cpptId,
+    this.initialImplementasi,
+    this.initialEvaluasi,
   });
 
   @override
@@ -39,9 +45,19 @@ class _IntervensiInapState extends State<IntervensiInap> {
   @override
   void initState() {
     super.initState();
-    // Initialize controllers
-    _implementasiController = TextEditingController();
-    _evaluasiController = TextEditingController();
+    // Initialize controllers with initial values jika ada
+    _implementasiController = TextEditingController(
+      text:
+          widget.initialImplementasi != null &&
+              widget.initialImplementasi!.isNotEmpty
+          ? widget.initialImplementasi
+          : '',
+    );
+    _evaluasiController = TextEditingController(
+      text: widget.initialEvaluasi != null && widget.initialEvaluasi!.isNotEmpty
+          ? widget.initialEvaluasi
+          : '',
+    );
   }
 
   @override
@@ -192,9 +208,10 @@ class _IntervensiInapState extends State<IntervensiInap> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Buat Intervensi Baru"),
+        centerTitle: true,
         backgroundColor: const Color(0xFFD7E2FD),
       ),
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFD7E2FD),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         // --- MODIFIED: Body is now a form ---

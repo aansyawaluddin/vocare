@@ -109,8 +109,8 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     _fullBuffer = '';
     _lastPartial = '';
     _state = VoiceState.initial;
-    _text = ''; 
-    _statusText = ''; 
+    _text = '';
+    _statusText = '';
     _isListening = false;
     _navigatedForSession = false;
 
@@ -751,7 +751,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
       // Cek ganda
       _isSessionActive = true;
       _lastPartial = '';
-      _fullBuffer = ''; // Pastikan buffer bersih di awal
+      _fullBuffer = '';
       _navigatedForSession = false;
       _reinitAttempts = 0;
       if (_currentSessionIndex == 0 && _sessionTranscripts.isEmpty) {
@@ -838,27 +838,17 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                   _state = VoiceState.initial;
                   _statusText = 'ready';
                   _text = '';
-                });
-                Future.delayed(const Duration(milliseconds: 200)).then((
-                  _,
-                ) async {
-                  if (!mounted) return;
                   _lastPartial = '';
                   _fullBuffer = '';
-                  _isSessionActive = true;
-                  try {
-                    await _startListeningSession();
-                  } catch (e) {
-                    debugPrint('Gagal memulai ulang sesi: $e');
-                  }
+                  _isSessionActive = false;
                 });
               },
               child: const Text('Rekam Ulang'),
             ),
+
             ElevatedButton(
               onPressed: () {
                 Navigator.of(ctx).pop();
-                // simpan
                 if (_sessionTranscripts.length > _currentSessionIndex) {
                   _sessionTranscripts[_currentSessionIndex] = transcript;
                 } else {
@@ -867,12 +857,14 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
 
                 final bool wasLast =
                     _currentSessionIndex >= (_totalSessions - 1);
+
                 if (wasLast) {
                   String combined = '';
                   for (final t in _sessionTranscripts) {
                     combined = _mergeWithOverlap(combined, t);
                   }
                   _navigateToReview(combined);
+
                   safeSetState(() {
                     _state = VoiceState.initial;
                     _statusText = 'ready';
@@ -880,26 +872,19 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                     _isListening = false;
                     _currentSessionIndex = 0;
                     _sessionTranscripts.clear();
+                    _isSessionActive = false;
                   });
                 } else {
                   safeSetState(() {
-                    _currentSessionIndex++;
+                    _currentSessionIndex++; 
+
                     _state = VoiceState.initial;
                     _statusText = 'ready';
                     _text = '';
-                  });
-                  Future.delayed(const Duration(milliseconds: 300)).then((
-                    _,
-                  ) async {
-                    if (!mounted) return;
                     _lastPartial = '';
                     _fullBuffer = '';
-                    _isSessionActive = true;
-                    try {
-                      await _startListeningSession();
-                    } catch (e) {
-                      debugPrint('Gagal mulai sesi berikutnya: $e');
-                    }
+
+                    _isSessionActive = false;
                   });
                 }
               },
@@ -1135,7 +1120,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                       onPressed: () {
                         safeSetState(() {
                           _showInitialQuestions = true;
-                        });                                                      
+                        });
                       },
                     ),
                   ),
@@ -1166,17 +1151,14 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
         break;
     }
 
-    return SizedBox(
-      height: 400,
-      child: Card(
-        color: Colors.white,
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        elevation: 3,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: content,
-        ),
+    return Card(
+      color: Colors.white,
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 3,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: content,
       ),
     );
   }
@@ -1272,7 +1254,6 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
               ),
             ),
             const SizedBox(height: 12),
-            // session counter (hanya jika multi-session)
             if (_totalSessions > 1)
               Text(
                 'Sesi ${_currentSessionIndex + 1} dari $_totalSessions',
@@ -1392,21 +1373,23 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
         child: Column(
           children: [
             const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: _buildQuestions(),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: _buildQuestions(),
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             SizedBox(
-              height: 160,
+              height: 200,
               child: Center(
-                child: SingleChildScrollView(
+                child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
                   child: _buildCenterContent(),
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: 24.0,

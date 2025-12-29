@@ -26,7 +26,6 @@ class VocareReport2 extends StatefulWidget {
 }
 
 const Color _backgroundColor = Color.fromARGB(255, 223, 240, 255);
-const Color _appBarBackgroundColor = Color(0xFFD7E2FD);
 const Color _titleColor = Color(0xFF093275);
 const Color _buttonSaveColor = Color(0xFF009563);
 
@@ -532,13 +531,15 @@ class _VocareReport2State extends State<VocareReport2> {
             cpptResp['data']['id'] != null)
           cpptId = int.tryParse(cpptResp['data']['id'].toString());
       }
-      
+
       // === MODIFIKASI: Intervensi creation logic REMOVED ===
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Sukses menyimpan pasien dan CPPT. Lanjutkan ke Intervensi.'),
+            content: Text(
+              'Sukses menyimpan pasien dan CPPT. Lanjutkan ke Intervensi.',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -716,8 +717,6 @@ class _VocareReport2State extends State<VocareReport2> {
           );
         serverObj = Map<String, dynamic>.from(merged);
       }
-
-      serverObj = serverObj ?? <String, dynamic>{};
 
       // Normalize top-level "data" into Map so we can find the nested asesmen object
       Map<String, dynamic> normalizedTopData = {};
@@ -920,18 +919,14 @@ class _VocareReport2State extends State<VocareReport2> {
     }
   }
 
-  /// Lenient parser that tries several heuristics to recover Map<String,dynamic>
-  /// from server responses that might be double-encoded, fenced, or python-repr-like.
   Map<String, dynamic>? _tryParseLenient(dynamic raw) {
     if (raw == null) return null;
     String s = raw is String ? raw.trim() : raw.toString();
     if (s.isEmpty) return null;
 
-    // 1) strip fenced code block markers (```json ... ```) - common from some services
     s = s.replaceAll(RegExp(r'^\s*```(?:json)?\s*'), '');
     s = s.replaceAll(RegExp(r'\s*```\s*\$'), '');
 
-    // 2) try direct jsonDecode
     try {
       final decoded = jsonDecode(s);
       if (decoded is Map<String, dynamic>)
@@ -939,7 +934,6 @@ class _VocareReport2State extends State<VocareReport2> {
       if (decoded is List) return {'_list': decoded};
     } catch (_) {}
 
-    // 3) try extracting substring from first '{' to last '}' (useful when wrapped in quotes)
     final firstBrace = s.indexOf('{');
     final lastBrace = s.lastIndexOf('}');
     if (firstBrace != -1 && lastBrace != -1 && lastBrace > firstBrace) {
@@ -951,7 +945,6 @@ class _VocareReport2State extends State<VocareReport2> {
       } catch (_) {}
     }
 
-    // 4) naive single-quote -> double-quote replacement (risky: may break apostrophes) - last resort
     try {
       final replaced = s.replaceAll("'", '"');
       final decoded = jsonDecode(replaced);
@@ -960,12 +953,6 @@ class _VocareReport2State extends State<VocareReport2> {
     } catch (_) {}
 
     return null;
-  }
-
-  void _onRencanaChanged(List<String> updated) {
-    setState(() {
-      _rencanaAsuhan = updated;
-    });
   }
 
   @override
@@ -984,7 +971,10 @@ class _VocareReport2State extends State<VocareReport2> {
               'Vocare Report',
               style: TextStyle(fontSize: 20, color: _titleColor),
             ),
-            backgroundColor: _appBarBackgroundColor,
+            backgroundColor: _backgroundColor,
+            flexibleSpace: Container(
+              decoration: const BoxDecoration(color: _backgroundColor),
+            ),
           ),
           body: SafeArea(
             child: Padding(
@@ -1025,12 +1015,6 @@ class _VocareReport2State extends State<VocareReport2> {
                   const SizedBox(height: _sectionSpacing),
                   buildMasalahKeperawatanSection(extractedFields),
                   const SizedBox(height: _sectionSpacing),
-                  // buildRencanaAsuhanSection(extractedFields),
-                  // RencanaAsuhanEditor(
-                  //   initialRencana: _rencanaAsuhan,
-                  //   editable: true,
-                  //   onChanged: _onRencanaChanged,
-                  // ),
                 ],
               ),
             ),
@@ -1068,38 +1052,6 @@ class _VocareReport2State extends State<VocareReport2> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    // Expanded(
-                    //   child: ElevatedButton(
-                    //     onPressed: (_isSaving)
-                    //         ? null
-                    //         : _saveRencanaAsuhan_StrictPut,
-                    //     style: ElevatedButton.styleFrom(
-                    //       backgroundColor: Colors.orange.shade700,
-                    //       shape: RoundedRectangleBorder(
-                    //         borderRadius: BorderRadius.circular(12),
-                    //       ),
-                    //       elevation: 0,
-                    //     ),
-                    //     child: _isSaving
-                    //         ? const SizedBox(
-                    //             width: 16,
-                    //             height: 16,
-                    //             child: CircularProgressIndicator(
-                    //               strokeWidth: 2,
-                    //               color: Colors.white,
-                    //             ),
-                    //           )
-                    //         : const Text(
-                    //             'Simpan Rencana',
-                    //             style: TextStyle(
-                    //               fontWeight: FontWeight.w600,
-                    //               color: Colors.white,
-                    //               fontSize: 14,
-                    //             ),
-                    //           ),
-                    //   ),
-                    // ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: ElevatedButton(

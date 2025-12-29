@@ -16,14 +16,6 @@ class HomePerawatPage extends StatefulWidget {
 class _HomePerawatPageState extends State<HomePerawatPage> {
   int _selectedTab = 0;
 
-  final List<String> rooms = [
-    'Semua Ruangan',
-    'UGD',
-    'Perawatan',
-    'ICU',
-    'PICU/NICU',
-  ];
-
   @override
   Widget build(BuildContext context) {
     final navy = const Color(0xFF082B54);
@@ -39,7 +31,6 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
 
             return Column(
               children: [
-                // Header (fixed)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
@@ -228,10 +219,10 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
                     child: _selectedTab == 0
                         ? RiwayatLaporan(
                             user: widget.user,
-                          ) // RiwayatLaporan harus punya scrolling sendiri (ListView)
+                          ) 
                         : PasienInap(
                             user: widget.user,
-                          ), // PasienInap/di dalamnya pakai LayoutBuilder; jangan wrap di scroll luar
+                          ), 
                   ),
                 ),
               ],
@@ -265,7 +256,7 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
                         Icon(Icons.add, color: Colors.white, size: 22),
                         SizedBox(width: 10),
                         Text(
-                          'Laporan Baru',
+                          'Pasien Baru',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 18,

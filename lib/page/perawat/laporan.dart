@@ -20,7 +20,6 @@ class _RiwayatLaporanState extends State<RiwayatLaporan> {
   String? _error;
   List<Map<String, String>> _reportsForUI = [];
 
-  // Warna default, bisa disesuaikan
   final Color navyColor = const Color(0xFF093275);
   final Color cardBlueColor = const Color(0xFFD7E2FD);
 
@@ -30,12 +29,10 @@ class _RiwayatLaporanState extends State<RiwayatLaporan> {
     _fetchAndProcessReports();
   }
 
-  /// Helper untuk mengambil base URL dari .env
   String _getBaseUrl() {
     return dotenv.env['API_URL'] ?? dotenv.env['API_BASE_URL'] ?? '';
   }
 
-  /// Helper untuk membuat header otentikasi
   Map<String, String> _getAuthHeaders() {
     return {
       'Accept': 'application/json',
@@ -43,16 +40,16 @@ class _RiwayatLaporanState extends State<RiwayatLaporan> {
     };
   }
 
-  /// Langkah 1: Mengambil daftar laporan dari API
   Future<List<Laporan>> _fetchLaporan() async {
     final url = Uri.parse('${_getBaseUrl()}/laporan/');
     final response = await http.get(url, headers: _getAuthHeaders());
 
     if (response.statusCode == 200) {
-      // API mengembalikan list langsung atau di dalam key 'data'
       dynamic body = jsonDecode(response.body);
-      List<dynamic> data = (body is Map && body.containsKey('data')) ? body['data'] : body;
-      
+      List<dynamic> data = (body is Map && body.containsKey('data'))
+          ? body['data']
+          : body;
+
       if (data is List) {
         return data.map((json) => Laporan.fromJson(json)).toList();
       } else {
@@ -63,15 +60,16 @@ class _RiwayatLaporanState extends State<RiwayatLaporan> {
     }
   }
 
-  /// Langkah 2: Mengambil daftar semua pasien dari API
   Future<List<Patient>> _fetchPatients() async {
     final url = Uri.parse('${_getBaseUrl()}/patients/');
     final response = await http.get(url, headers: _getAuthHeaders());
 
     if (response.statusCode == 200) {
       dynamic body = jsonDecode(response.body);
-      List<dynamic> data = (body is Map && body.containsKey('data')) ? body['data'] : body;
-      
+      List<dynamic> data = (body is Map && body.containsKey('data'))
+          ? body['data']
+          : body;
+
       if (data is List) {
         return data.map((json) => Patient.fromJson(json)).toList();
       } else {
@@ -82,22 +80,24 @@ class _RiwayatLaporanState extends State<RiwayatLaporan> {
     }
   }
 
-  /// Langkah 3: Menggabungkan data dan mempersiapkannya untuk UI
   Future<void> _fetchAndProcessReports() async {
     try {
-      // Ambil kedua data secara bersamaan
       final List<Laporan> laporanList = await _fetchLaporan();
       final List<Patient> patientList = await _fetchPatients();
 
-      // Ubah list pasien menjadi map untuk pencarian cepat (O(1) average time complexity)
+      laporanList.sort((a, b) {
+        // Gunakan fallback DateTime(0) jika tanggal null
+        final dateA = a.tanggal ?? DateTime(0);
+        final dateB = b.tanggal ?? DateTime(0);
+        return dateB.compareTo(dateA);
+      });
+
       final patientMap = {for (var p in patientList) p.id: p};
 
-      // Proses dan gabungkan data
       final List<Map<String, String>> processedReports = [];
       for (final laporan in laporanList) {
         final patient = patientMap[laporan.patientId];
-        
-        // Format tanggal agar mudah dibaca
+
         final formattedDate = laporan.tanggal != null
             ? DateFormat('d MMMM yyyy', 'id_ID').format(laporan.tanggal!)
             : 'Tanggal tidak valid';
@@ -112,7 +112,6 @@ class _RiwayatLaporanState extends State<RiwayatLaporan> {
       setState(() {
         _reportsForUI = processedReports;
       });
-
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -136,15 +135,16 @@ class _RiwayatLaporanState extends State<RiwayatLaporan> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Text('Terjadi kesalahan: $_error', textAlign: TextAlign.center),
+          child: Text(
+            'Terjadi kesalahan: $_error',
+            textAlign: TextAlign.center,
+          ),
         ),
       );
     }
 
     if (_reportsForUI.isEmpty) {
-      return const Center(
-        child: Text('Belum ada riwayat laporan.'),
-      );
+      return const Center(child: Text('Belum ada riwayat laporan.'));
     }
 
     return LaporanWidget(

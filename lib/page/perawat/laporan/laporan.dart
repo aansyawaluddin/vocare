@@ -24,11 +24,8 @@ class _VocareLaporanState extends State<VocareLaporan> {
   Map<String, dynamic>? _laporanData;
   bool _isLoading = true;
   String? _error;
-
-  // MODIFICATION: Add a loading state for the update process
   bool _isUpdatingLaporan = false;
 
-  // MODIFICATION: Add TextEditingControllers for each editable section
   late final TextEditingController _sdkiController;
   late final TextEditingController _slkiController;
   late final TextEditingController _sikiController;
@@ -37,7 +34,6 @@ class _VocareLaporanState extends State<VocareLaporan> {
   @override
   void initState() {
     super.initState();
-    // MODIFICATION: Initialize the controllers
     _sdkiController = TextEditingController();
     _slkiController = TextEditingController();
     _sikiController = TextEditingController();
@@ -46,7 +42,6 @@ class _VocareLaporanState extends State<VocareLaporan> {
     _fetchLaporan();
   }
 
-  // MODIFICATION: Dispose controllers to prevent memory leaks
   @override
   void dispose() {
     _sdkiController.dispose();
@@ -63,7 +58,6 @@ class _VocareLaporanState extends State<VocareLaporan> {
   }
 
   Map<String, String> _buildHeaders({bool isPutting = false}) {
-    // MODIFICATION: Added a flag to include Content-Type for PUT/POST
     final headers = {
       'Accept': 'application/json',
       if (isPutting) 'Content-Type': 'application/json',
@@ -113,7 +107,6 @@ class _VocareLaporanState extends State<VocareLaporan> {
     }
   }
 
-  // MODIFICATION: New function to update the report via PUT request
   Future<void> _updateLaporan() async {
     setState(() => _isUpdatingLaporan = true);
 
@@ -156,8 +149,7 @@ class _VocareLaporanState extends State<VocareLaporan> {
     }
   }
 
-  /// This function is no longer used for rendering the main UI but is kept
-  /// in case it's needed for other display purposes.
+
   String _formatContentToList(String? content) {
     if (content == null || content.isEmpty || content == '{}') {
       return 'Tidak ada data';
@@ -174,7 +166,6 @@ class _VocareLaporanState extends State<VocareLaporan> {
     return formattedItems.join('\n');
   }
 
-  // MODIFICATION: _buildSection now takes a controller to be editable
   Widget _buildSection(String title, TextEditingController controller) {
     return Container(
       width: double.infinity,
@@ -203,10 +194,9 @@ class _VocareLaporanState extends State<VocareLaporan> {
             ),
           ),
           const SizedBox(height: 10),
-          // MODIFICATION: Replaced Text with TextFormField for editing
           TextFormField(
             controller: controller,
-            maxLines: null, // Allows multiline input
+            maxLines: null,
             keyboardType: TextInputType.multiline,
             style: const TextStyle(height: 1.4, fontSize: 16),
             decoration: InputDecoration(
@@ -248,7 +238,6 @@ class _VocareLaporanState extends State<VocareLaporan> {
       return const Center(child: Text('Tidak ada data laporan ditemukan.'));
     }
     
-    // MODIFICATION: Calls to _buildSection now use controllers
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
@@ -285,7 +274,6 @@ class _VocareLaporanState extends State<VocareLaporan> {
         backgroundColor: appBarBackground,
       ),
       body: SafeArea(child: _buildBody()),
-      // MODIFICATION: bottomNavigationBar now has a Row with two buttons
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(20, 8, 20, 18),
         child: Row(
@@ -322,7 +310,6 @@ class _VocareLaporanState extends State<VocareLaporan> {
               ),
             ),
             const SizedBox(width: 12),
-            // Done/Finish Button
             Expanded(
               child: SizedBox(
                 height: 56,

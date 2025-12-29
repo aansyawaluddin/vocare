@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
@@ -59,7 +60,9 @@ class _PasienInapState extends State<PasienInap> {
       );
 
       if (patientsResponse.statusCode != 200) {
-        throw Exception('Gagal memuat data pasien: ${patientsResponse.statusCode}');
+        throw Exception(
+          'Gagal memuat data pasien: ${patientsResponse.statusCode}',
+        );
       }
 
       dynamic patientsBody = jsonDecode(patientsResponse.body);
@@ -77,23 +80,35 @@ class _PasienInapState extends State<PasienInap> {
 
       final List<Map<String, dynamic>> patientMaps = patientsData
           .where((e) => e != null)
-          .map((e) => (e is Map) ? Map<String, dynamic>.from(e) : <String, dynamic>{})
+          .map(
+            (e) =>
+                (e is Map) ? Map<String, dynamic>.from(e) : <String, dynamic>{},
+          )
           .toList();
-      
+
       final inpatients = patientMaps.where((p) {
-        final rawStatus = (p['status_rawat'] ?? p['statusRawat'] ?? p['status'] ?? '')
-            .toString()
-            .toLowerCase();
+        final rawStatus =
+            (p['status_rawat'] ?? p['statusRawat'] ?? p['status'] ?? '')
+                .toString()
+                .toLowerCase();
         return rawStatus.contains('rawat_inap') ||
             rawStatus.contains('rawat inap') ||
             rawStatus.contains('inap');
       }).toList();
 
-      // Menggunakan seluruh data pasien untuk halaman detail
+      inpatients.sort((a, b) {
+        String dateStrA = (a['created_at'] ?? a['createdAt'] ?? '').toString();
+        String dateStrB = (b['created_at'] ?? b['createdAt'] ?? '').toString();
+
+        DateTime dateA = DateTime.tryParse(dateStrA) ?? DateTime(0);
+        DateTime dateB = DateTime.tryParse(dateStrB) ?? DateTime(0);
+
+        return dateB.compareTo(dateA);
+      });
+
       loadedForUI = inpatients.map((patient) {
         return Map<String, dynamic>.from(patient);
       }).toList();
-
     } catch (e, st) {
       debugPrint('Error saat fetch pasien: $e\n$st');
       _error = e.toString();
@@ -120,10 +135,7 @@ class _PasienInapState extends State<PasienInap> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                'Terjadi kesalahan: $_error',
-                textAlign: TextAlign.center,
-              ),
+              Text('Terjadi kesalahan: $_error', textAlign: TextAlign.center),
               const SizedBox(height: 12),
               ElevatedButton(
                 onPressed: _fetchAndProcessInpatients,
@@ -193,6 +205,20 @@ class PasienInapWidget extends StatelessWidget {
               final id = p['id']?.toString() ?? '-';
               final nama = p['nama']?.toString() ?? '-';
               final noRm = p['no_rekam_medis']?.toString() ?? '-';
+              String tglLahirStr = '-';
+              // Cek key 'tgl_lahir' atau 'tanggal_lahir' dari API
+              final rawTgl = p['tgl_lahir'] ?? p['tanggal_lahir'];
+
+              if (rawTgl != null) {
+                try {
+                  // Parsing dan format tanggal agar lebih rapi (cth: 12 Januari 1990)
+                  final date = DateTime.parse(rawTgl.toString());
+                  tglLahirStr = DateFormat('d MMMM yyyy', 'id_ID').format(date);
+                } catch (_) {
+                  // Jika format gagal, tampilkan raw string
+                  tglLahirStr = rawTgl.toString();
+                }
+              }
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12.0),
@@ -202,14 +228,12 @@ class PasienInapWidget extends StatelessWidget {
                   cardBlue: cardBlue,
                   noRekamMedis: noRm,
                   nama: nama,
-                  // MODIFIED: Navigasi ke PatientDetailPage dengan membawa seluruh data pasien
+                  tglLahir: tglLahirStr,
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (context) => PatientDetailPage(
-                          user: user,
-                          patientData: p,
-                        ),
+                        builder: (context) =>
+                            PatientDetailPage(user: user, patientData: p),
                       ),
                     );
                   },
@@ -230,6 +254,7 @@ class InpatientCard extends StatelessWidget {
     required this.cardBlue,
     required this.noRekamMedis,
     required this.nama,
+    required this.tglLahir,
     this.onTap,
   });
 
@@ -237,6 +262,7 @@ class InpatientCard extends StatelessWidget {
   final Color cardBlue;
   final String noRekamMedis;
   final String nama;
+  final String tglLahir;
   final VoidCallback? onTap;
 
   @override
@@ -245,7 +271,7 @@ class InpatientCard extends StatelessWidget {
       children: [
         Container(
           width: 50,
-          height: 70,
+          height: 80,
           decoration: BoxDecoration(
             color: navy,
             borderRadius: BorderRadius.circular(10),
@@ -263,8 +289,11 @@ class InpatientCard extends StatelessWidget {
               child: InkWell(
                 onTap: onTap,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-                  height: 70,
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 8,
+                    horizontal: 14,
+                  ),
+                  height: 80,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -283,9 +312,22 @@ class InpatientCard extends StatelessWidget {
                         style: TextStyle(
                           color: navy.withOpacity(0.95),
                           fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tgl Lahir : $tglLahir',
+                        style: TextStyle(
+                          color: navy,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
+                      // ----------------------
                     ],
                   ),
                 ),

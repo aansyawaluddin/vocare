@@ -64,7 +64,8 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
 
     if (response.statusCode == 200) {
       final decodedBody = jsonDecode(response.body);
-      final List<dynamic> assessmentList = (decodedBody['data'] as List<dynamic>?) ?? [];
+      final List<dynamic> assessmentList =
+          (decodedBody['data'] as List<dynamic>?) ?? [];
 
       if (assessmentList.isEmpty) {
         return null;
@@ -77,11 +78,15 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
         return dateB.compareTo(dateA); // Newest first
       });
 
-      final latestAssessmentId = int.tryParse(assessmentList.first['id']?.toString() ?? '');
+      final latestAssessmentId = int.tryParse(
+        assessmentList.first['id']?.toString() ?? '',
+      );
       debugPrint('Assessment ID terbaru ditemukan: $latestAssessmentId');
       return latestAssessmentId;
     } else {
-      throw Exception('Gagal mengambil data Assessment: Status ${response.statusCode}');
+      throw Exception(
+        'Gagal mengambil data Assessment: Status ${response.statusCode}',
+      );
     }
   }
 
@@ -93,9 +98,11 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
       final int? latestAssessmentId = await _getLatestAssessmentId(token);
 
       if (latestAssessmentId == null) {
-        throw Exception('Tidak dapat membuat CPPT. Tidak ada data Assessment untuk pasien ini.');
+        throw Exception(
+          'Tidak dapat membuat CPPT. Tidak ada data Assessment untuk pasien ini.',
+        );
       }
-      
+
       final base = _getBaseUrl();
       if (base.isEmpty) throw Exception('NO_API');
       final apiUrl = base.endsWith('/') ? '${base}cppt/' : '$base/cppt/';
@@ -131,13 +138,13 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
         if (responseBody is Map) {
           cpptId =
               int.tryParse(
-                      (responseBody['id'] ??
-                              responseBody['cppt_id'] ??
-                              responseBody['data']?['id'])
-                          ?.toString() ??
-                          '0',
-                    ) ??
-                    0;
+                (responseBody['id'] ??
+                            responseBody['cppt_id'] ??
+                            responseBody['data']?['id'])
+                        ?.toString() ??
+                    '0',
+              ) ??
+              0;
         }
 
         debugPrint('Laporan CPPT berhasil dikirim dengan CPPT ID: $cpptId');
@@ -191,7 +198,8 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
 
     if (response.statusCode == 200) {
       final decodedBody = jsonDecode(response.body);
-      final List<dynamic> cpptList = (decodedBody['data'] as List<dynamic>?) ?? [];
+      final List<dynamic> cpptList =
+          (decodedBody['data'] as List<dynamic>?) ?? [];
 
       if (cpptList.isEmpty) {
         return null;
@@ -208,11 +216,41 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
       debugPrint('CPPT ID terbaru ditemukan: $latestCpptId');
       return latestCpptId;
     } else {
-      throw Exception('Gagal mengambil data CPPT: Status ${response.statusCode}');
+      throw Exception(
+        'Gagal mengambil data CPPT: Status ${response.statusCode}',
+      );
     }
   }
 
-  // --- MODIFIED: FUNCTION TO NAVIGATE TO INTERVENSI PAGE ---
+  // -----------------------
+  // Helper: ekstrak implementasi & evaluasi dari teks transkrip
+  // -----------------------
+  Map<String, String> _extractImplementasiEvaluasi(String text) {
+    // regex: ambil teks setelah "implementasi" sampai sebelum "evaluasi" (jika ada) dan sebaliknya
+    final implPattern = RegExp(
+      r'implementasi\s*[:\-]?\s*(.+?)(?=(?:evaluasi\s*[:\-]?)|$)',
+      caseSensitive: false,
+      dotAll: true,
+      multiLine: true,
+    );
+
+    final evalPattern = RegExp(
+      r'evaluasi\s*[:\-]?\s*(.+?)(?=(?:implementasi\s*[:\-]?)|$)',
+      caseSensitive: false,
+      dotAll: true,
+      multiLine: true,
+    );
+
+    final implMatch = implPattern.firstMatch(text);
+    final evalMatch = evalPattern.firstMatch(text);
+
+    final implementasi = implMatch?.group(1)?.trim() ?? '';
+    final evaluasi = evalMatch?.group(1)?.trim() ?? '';
+
+    return {'implementasi': implementasi, 'evaluasi': evaluasi};
+  }
+
+  // --- MODIFIED: FUNCTION TO NAVIGATE TO INTERVENSI PAGE (pass initial values) ---
   Future<void> _navigateToIntervensi() async {
     setState(() => _isLoading = true);
     final token = widget.user.token ?? '';
@@ -221,21 +259,29 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
       final int? latestCpptId = await _getLatestCpptId(token);
       if (latestCpptId == null) {
         throw Exception(
-            'Tidak dapat melanjutkan. Tidak ada data CPPT untuk pasien ini.');
+          'Tidak dapat melanjutkan. Tidak ada data CPPT untuk pasien ini.',
+        );
       }
 
       if (!mounted) return;
 
-      // 2. Navigate to IntervensiInap page with all necessary data
+      // 2. Extract implementasi/evaluasi dari _currentText
+      final extracted = _extractImplementasiEvaluasi(_currentText);
+      final initialImplementasi = extracted['implementasi'] ?? '';
+      final initialEvaluasi = extracted['evaluasi'] ?? '';
+
+      // 3. Navigate to IntervensiInap page with all necessary data
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => IntervensiInap(
             token: token,
             patientId: widget.patientId,
-            perawatId: widget.user.id, 
+            perawatId: widget.user.id,
             query: _currentText,
             cpptId: latestCpptId,
+            initialImplementasi: initialImplementasi,
+            initialEvaluasi: initialEvaluasi,
           ),
         ),
       );
@@ -250,7 +296,8 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
 
   void _handleErrorResponse(http.Response response) {
     if (!mounted) return;
-    String errorMessage = 'Gagal mengirim data: Status Code ${response.statusCode}';
+    String errorMessage =
+        'Gagal mengirim data: Status Code ${response.statusCode}';
     try {
       final responseBody = jsonDecode(response.body);
       if (responseBody is Map && responseBody.containsKey('message')) {
