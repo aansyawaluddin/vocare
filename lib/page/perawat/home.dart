@@ -49,17 +49,13 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
                       Row(
                         children: [
                           Container(
-                            width: isCompact ? 40 : 44,
-                            height: isCompact ? 40 : 44,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.06),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
+                            width: isCompact ? 54 : 64,
+                            height: isCompact ? 54 : 64,
                             child: Center(
-                              child: Icon(
-                                Icons.health_and_safety,
-                                color: Colors.white,
-                                size: isCompact ? 22 : 26,
+                              child: Image.asset(
+                                'assets/icon.png',
+                                width: isCompact ? 54 : 64,
+                                height: isCompact ? 54 : 64,
                               ),
                             ),
                           ),
@@ -217,12 +213,8 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 18.0),
                     child: _selectedTab == 0
-                        ? RiwayatLaporan(
-                            user: widget.user,
-                          ) 
-                        : PasienInap(
-                            user: widget.user,
-                          ), 
+                        ? RiwayatLaporan(user: widget.user)
+                        : PasienInap(user: widget.user),
                   ),
                 ),
               ],
@@ -233,41 +225,40 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
       bottomNavigationBar: _selectedTab == 0
           ? SafeArea(
               minimum: const EdgeInsets.fromLTRB(24, 8, 24, 18),
-              child:  SizedBox(
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => UploadLab(user: widget.user),
-                        ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: navy,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => UploadLab(user: widget.user),
                       ),
-                      elevation: 8,
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: navy,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.add, color: Colors.white, size: 22),
-                        SizedBox(width: 10),
-                        Text(
-                          'Pasien Baru',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
+                    elevation: 8,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.add, color: Colors.white, size: 22),
+                      SizedBox(width: 10),
+                      Text(
+                        'Pasien Baru',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-            
+              ),
             )
           : null,
     );

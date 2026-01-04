@@ -52,7 +52,6 @@ Future<User> loginRequest(String username, String password) async {
     }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      // ambil token dari beberapa struktur kemungkinan
       String? accessToken;
       if (responseData is Map) {
         accessToken = (responseData['access_token'] ?? responseData['token'])
@@ -70,7 +69,6 @@ Future<User> loginRequest(String username, String password) async {
         await storage.write(key: 'access_token', value: accessToken);
       }
 
-      // ambil object user dari berbagai struktur
       dynamic userJson;
       if (responseData is Map) {
         userJson =
@@ -87,7 +85,6 @@ Future<User> loginRequest(String username, String password) async {
         throw Exception('Response tidak berisi informasi user');
       }
 
-      // simpan user ke secure storage supaya bisa auto-login
       try {
         Map<String, dynamic> userMap;
         if (userJson is Map<String, dynamic>) {
@@ -95,14 +92,12 @@ Future<User> loginRequest(String username, String password) async {
         } else if (userJson is Map) {
           userMap = Map<String, dynamic>.from(userJson);
         } else {
-          // jika bukan map, coba encode-decode untuk ambil strukturnya
           userMap = Map<String, dynamic>.from(
             json.decode(json.encode(userJson)),
           );
         }
         await storage.write(key: 'user', value: json.encode(userMap));
       } catch (e) {
-        // jika penyimpanan user gagal, tetap lanjut (token sudah tersimpan)
         if (kDebugMode) debugPrint('Gagal menyimpan user ke storage: $e');
       }
 
@@ -137,7 +132,10 @@ class _LoginState extends State<Login> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
+  final Color _primaryColor = const Color(0xFF093275);
+
   bool _isLoading = false;
+  bool _obscureText = true; 
 
   void _showSnack(String msg, {Color bg = Colors.red}) {
     ScaffoldMessenger.of(
@@ -157,7 +155,7 @@ class _LoginState extends State<Login> {
     final password = _passwordController.text.trim();
 
     if (username.isEmpty || password.isEmpty) {
-      _showSnack('username dan password harus diisi');
+      _showSnack('Username dan password harus diisi');
       return;
     }
 
@@ -169,18 +167,6 @@ class _LoginState extends State<Login> {
       if (!mounted) return;
       FocusScope.of(context).unfocus();
 
-      // debug: cek token
-      if (user.token.isNotEmpty) {
-        if (kDebugMode)
-          debugPrint(
-            'Login sukses. Token (partial): ${user.token.substring(0, user.token.length > 12 ? 12 : user.token.length)}...',
-          );
-      } else {
-        if (kDebugMode)
-          debugPrint('Login sukses tetapi token kosong di objek User.');
-      }
-
-      // navigasi ke Home — pastikan Home menerima parameter user
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -189,14 +175,12 @@ class _LoginState extends State<Login> {
       );
     } catch (e) {
       if (!mounted) return;
-
       var errorMessage = e.toString();
       if (errorMessage.contains('invalid_credentials')) {
-        errorMessage = 'username atau password salah';
+        errorMessage = 'Username atau password salah';
       } else {
         errorMessage = errorMessage.replaceAll('Exception: ', '');
       }
-
       _showSnack(errorMessage);
     } finally {
       if (mounted) {
@@ -205,140 +189,206 @@ class _LoginState extends State<Login> {
     }
   }
 
+  Widget _buildInputGroup({
+    required String label,
+    required TextEditingController controller,
+    required String hint,
+    bool isPassword = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+            color: _primaryColor,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey.shade400),
+          ),
+          child: TextField(
+            controller: controller,
+            obscureText: isPassword ? _obscureText : false,
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
+              suffixIcon: isPassword
+                  ? IconButton(
+                      icon: Icon(
+                        _obscureText
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        color: _primaryColor,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscureText = !_obscureText;
+                        });
+                      },
+                    )
+                  : null,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final screenWidth = size.width;
-    final screenHeight = size.height;
-
-    final double formMaxWidth = math.min(480, screenWidth * 0.7);
-
-    final double fieldHeight = math.max(48, screenHeight * 0.06);
-    final double buttonHeight = math.max(48, screenHeight * 0.07);
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: formMaxWidth),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    height: fieldHeight,
-                    width: double.infinity,
-                    child: TextField(
-                      controller: _usernameController,
-                      keyboardType: TextInputType.text,
-                      textInputAction: TextInputAction.next,
-                      decoration: InputDecoration(
-                        labelText: 'username',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFA7A7A7),
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFA7A7A7),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFA7A7A7),
-                          ),
-                        ),
-                        disabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFA7A7A7),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    height: fieldHeight,
-                    width: double.infinity,
-                    child: TextField(
-                      controller: _passwordController,
-                      obscureText: true,
-                      textInputAction: TextInputAction.done,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFA7A7A7),
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFA7A7A7),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFA7A7A7),
-                          ),
-                        ),
-                        disabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(
-                            color: Color(0xFFA7A7A7),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    height: buttonHeight,
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _login,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF093275),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        minimumSize: Size(double.infinity, buttonHeight),
-                        disabledBackgroundColor: const Color(0xFF093275),
-                      ),
-                      child: _isLoading
-                          ? SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
-                              ),
-                            )
-                          : const Text(
-                              'Login',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                    ),
-                  ),
+      backgroundColor: _primaryColor,
+      body: Stack(
+        children: [
+          Container(
+            height: size.height * 0.4,
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFFE3F2FD), 
+                  Color(0xFFBBDEFB), 
                 ],
               ),
             ),
           ),
-        ),
+
+          // 2. Konten Utama
+          SafeArea(
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(
+                    left: 24,
+                    right: 24,
+                    top: 30,
+                    bottom: 30,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Welcome to VOCARE",
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: _primaryColor,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        "Sign in to continue",
+                        style: TextStyle(fontSize: 14, color: _primaryColor),
+                      ),
+                    ],
+                  ),
+                ),
+
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topRight: Radius.circular(90),
+                        bottomLeft: Radius.circular(90),
+                      ),
+                    ),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 30,
+                        vertical: 40,
+                      ),
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 10),
+                          Text(
+                            "Login",
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: _primaryColor,
+                            ),
+                          ),
+                          const SizedBox(height: 40),
+
+                          _buildInputGroup(
+                            label: "Email",
+                            controller: _usernameController,
+                            hint: "Masukkan Email",
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          _buildInputGroup(
+                            label: "Password",
+                            controller: _passwordController,
+                            hint: "Masukkan Password",
+                            isPassword: true,
+                          ),
+
+                          const SizedBox(height: 40),
+
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton(
+                              onPressed: _isLoading ? null : _login,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _primaryColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                elevation: 2,
+                              ),
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Login',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(height: size.height * 0.1),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -40,5 +40,4 @@ flutter_launcher_icons:
 flutter:
   uses-material-design: true
   assets:
-    - .env
-    - assets/pengguna.png
+    - assets/
