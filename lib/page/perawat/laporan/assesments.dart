@@ -3,15 +3,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:vocare/page/perawat/laporan/laporan.dart';
 import 'package:vocare/widgets/perawat/report_laporan.dart';
 import 'package:vocare/widgets/perawat/report_utils.dart';
-import 'package:vocare/page/perawat/laporan/cppt_and_intervensi.dart';
+import 'package:vocare/common/type.dart';
 
 class VocareReport2 extends StatefulWidget {
   final String reportText;
   final Map<String, dynamic>? apiResponse;
   final String? username;
   final String? token;
+  final User user;
 
   const VocareReport2({
     super.key,
@@ -19,6 +21,7 @@ class VocareReport2 extends StatefulWidget {
     this.apiResponse,
     this.username,
     this.token,
+    required this.user,
   });
 
   @override
@@ -35,13 +38,58 @@ const double _sectionSpacing = 12.0;
 class _VocareReport2State extends State<VocareReport2> {
   Map<String, dynamic>? _cachedExtractedFields;
   bool _isSaving = false;
-  List<String> _rencanaAsuhan = [];
+
+  String? _nurseAssignedRoom;
+  bool _isLoadingProfile = false;
 
   @override
   void initState() {
     super.initState();
     _logApiResponse();
     _cacheExtractedFields();
+    _fetchNurseProfile();
+  }
+
+  Future<void> _fetchNurseProfile() async {
+    if (widget.token == null) return;
+
+    setState(() => _isLoadingProfile = true);
+
+    final url = '${_baseUrlFromEnv()}/auth/profile';
+
+    try {
+      if (kDebugMode) debugPrint("Fetching Profile: $url");
+
+      final response = await http.get(Uri.parse(url), headers: _buildHeaders());
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        String? roomName;
+        if (data['ruangan'] != null) {
+          roomName = data['ruangan'].toString();
+        } else if (data['data'] != null && data['data'] is Map) {
+          roomName = data['data']['ruangan']?.toString();
+        }
+
+        if (mounted) {
+          setState(() {
+            _nurseAssignedRoom = roomName;
+          });
+          if (kDebugMode)
+            debugPrint("RUANGAN PERAWAT TERDETEKSI: $_nurseAssignedRoom");
+        }
+      } else {
+        if (kDebugMode)
+          debugPrint(
+            "Gagal fetch profile: ${response.statusCode} - ${response.body}",
+          );
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint("Error fetch profile: $e");
+    } finally {
+      if (mounted) setState(() => _isLoadingProfile = false);
+    }
   }
 
   @override
@@ -55,10 +103,9 @@ class _VocareReport2State extends State<VocareReport2> {
 
   void _logApiResponse() {
     if (!kDebugMode) return;
-
     try {
       final pretty = const JsonEncoder.withIndent(
-        '  ',
+        '  ',
       ).convert(widget.apiResponse);
       _debugPrintFull(pretty);
     } catch (e) {
@@ -79,12 +126,8 @@ class _VocareReport2State extends State<VocareReport2> {
 
   void _cacheExtractedFields() {
     final Map<String, dynamic> merged = {};
-
     if (widget.apiResponse != null) {
-      widget.apiResponse!.forEach((k, v) {
-        merged[k] = v;
-      });
-
+      merged.addAll(widget.apiResponse!);
       final dynamic dataField = widget.apiResponse!['data'];
       if (dataField is Map<String, dynamic>) {
         dataField.forEach((k, v) {
@@ -101,7 +144,6 @@ class _VocareReport2State extends State<VocareReport2> {
         } catch (_) {}
       }
     }
-
     try {
       final extractedFromData = extractAssessmentObject(widget.apiResponse);
       final extractedFieldsFromData = extractFieldsFromAssessment(
@@ -113,45 +155,7 @@ class _VocareReport2State extends State<VocareReport2> {
         });
       }
     } catch (_) {}
-
     _cachedExtractedFields = merged;
-
-    List<String> rencana = [];
-    try {
-      final cand =
-          merged['rencana_asuhan_list'] ??
-          merged['rencana_asuhan'] ??
-          merged['rencana_asuhan_keperawatan'];
-      if (cand is List) {
-        rencana = cand
-            .map((e) => e?.toString() ?? '')
-            .where((s) => s.isNotEmpty)
-            .toList();
-      } else if (cand is String && cand.trim().isNotEmpty) {
-        rencana = cand
-            .split(RegExp(r'\r?\n|;|,|-'))
-            .map((e) => e.trim())
-            .where((s) => s.isNotEmpty)
-            .toList();
-      }
-    } catch (_) {
-      rencana = [];
-    }
-
-    _rencanaAsuhan = rencana;
-
-    if (kDebugMode) {
-      try {
-        debugPrint(
-          'Merged extracted fields: ${jsonEncode(_cachedExtractedFields)}',
-        );
-      } catch (_) {
-        debugPrint(
-          'Merged extracted fields (toString): $_cachedExtractedFields',
-        );
-      }
-      debugPrint('Initial rencana_asuhan: $_rencanaAsuhan');
-    }
   }
 
   String _baseUrlFromEnv() {
@@ -167,36 +171,125 @@ class _VocareReport2State extends State<VocareReport2> {
     };
     if (widget.token != null && widget.token!.isNotEmpty) {
       headers['Authorization'] = 'Bearer ${widget.token}';
-      if (kDebugMode)
-        debugPrint(
-          'Authorization header set (partial): ${widget.token!.substring(0, widget.token!.length > 8 ? 8 : widget.token!.length)}...',
-        );
-    } else {
-      if (kDebugMode)
-        debugPrint('No token available; Authorization header NOT set.');
     }
     return headers;
+  }
+
+  String _formatDateToIso(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return "1990-01-01";
+    try {
+      if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dateStr)) return dateStr;
+      final parts = dateStr.split(' ');
+      if (parts.length < 3) return "1990-01-01";
+      final day = parts[0].padLeft(2, '0');
+      String month = parts[1].toLowerCase();
+      final year = parts[2];
+      const monthMap = {
+        'januari': '01',
+        'jan': '01',
+        'februari': '02',
+        'feb': '02',
+        'maret': '03',
+        'mar': '03',
+        'april': '04',
+        'apr': '04',
+        'mei': '05',
+        'may': '05',
+        'juni': '06',
+        'jun': '06',
+        'juli': '07',
+        'jul': '07',
+        'agustus': '08',
+        'aug': '08',
+        'agu': '08',
+        'september': '09',
+        'sep': '09',
+        'oktober': '10',
+        'okt': '10',
+        'oct': '10',
+        'november': '11',
+        'nov': '11',
+        'desember': '12',
+        'des': '12',
+        'dec': '12',
+      };
+      final monthNum = monthMap[month] ?? '01';
+      return "$year-$monthNum-$day";
+    } catch (e) {
+      return "1990-01-01";
+    }
   }
 
   Future<int?> _createPatient({
     required int idAssessment,
     required String nama,
+    required Map<String, dynamic> sourceData,
   }) async {
     final baseUrl = _baseUrlFromEnv();
     final url = '$baseUrl/patients/';
-    final body = jsonEncode({'id_assesment': idAssessment, 'nama': nama});
+
+    Map<String, dynamic> infoUmum = {};
     try {
-      if (kDebugMode) debugPrint('POST $url -> $body');
+      if (sourceData['data'] is Map &&
+          sourceData['data']['data'] is Map &&
+          sourceData['data']['data']['asesmen_awal_keperawatan'] is Map) {
+        final asesmen = sourceData['data']['data']['asesmen_awal_keperawatan'];
+        if (asesmen['informasi_umum'] is Map)
+          infoUmum = asesmen['informasi_umum'];
+      } else {
+        if (sourceData['informasi_umum'] is Map)
+          infoUmum = sourceData['informasi_umum'];
+      }
+    } catch (_) {}
+
+    final String alamat = infoUmum['alamat']?.toString() ?? '-';
+    final String jenisKelamin =
+        infoUmum['jenis_kelamin']?.toString() ?? 'Laki-laki';
+    final String noRekamMedis =
+        infoUmum['nomor_rekam_medis']?.toString() ?? '-';
+    final String penanggungJawab =
+        infoUmum['penanggung_jawab']?.toString() ?? '-';
+    final String tglLahirFixed = _formatDateToIso(
+      infoUmum['tanggal_lahir']?.toString(),
+    );
+
+    String ruanganToSend;
+
+    if (_nurseAssignedRoom != null && _nurseAssignedRoom!.isNotEmpty) {
+      ruanganToSend = _nurseAssignedRoom!;
+    } else {
+      throw Exception(
+        "Data ruangan perawat belum termuat. Mohon refresh halaman.",
+      );
+    }
+
+    if (kDebugMode) debugPrint("Ruangan Dikirim ke Server: $ruanganToSend");
+
+    final Map<String, dynamic> requestBody = {
+      "alamat": alamat,
+      "assesment_id": idAssessment,
+      "jenis_kelamin": jenisKelamin,
+      "nama": nama,
+      "no_rekam_medis": noRekamMedis,
+      "penanggung_jawab": penanggungJawab,
+      "ruangan": ruanganToSend,
+      "tgl_lahir": tglLahirFixed,
+    };
+
+    try {
+      final bodyEncoded = jsonEncode(requestBody);
+      if (kDebugMode) debugPrint('POST $url -> $bodyEncoded');
+
       final resp = await http.post(
         Uri.parse(url),
         headers: _buildHeaders(),
-        body: body,
+        body: bodyEncoded,
       );
+
       if (kDebugMode)
-        debugPrint('CreatePatient response ${resp.statusCode}: ${resp.body}');
-      if (resp.statusCode == 200 ||
-          resp.statusCode == 201 ||
-          resp.statusCode == 202) {
+        debugPrint('CreatePatient resp ${resp.statusCode}: ${resp.body}');
+
+      if (resp.statusCode >= 200 && resp.statusCode < 300) {
         if (resp.body.isEmpty) return null;
         final Map<String, dynamic> data = jsonDecode(resp.body);
         if (data.containsKey('id'))
@@ -207,6 +300,7 @@ class _VocareReport2State extends State<VocareReport2> {
           return (data['patient_id'] is int)
               ? data['patient_id']
               : int.tryParse(data['patient_id'].toString());
+
         for (final v in data.values) {
           if (v is int) return v;
           if (v is Map && v['id'] != null)
@@ -214,153 +308,89 @@ class _VocareReport2State extends State<VocareReport2> {
         }
         return null;
       } else {
-        String msg = resp.body;
-        try {
-          final parsed = jsonDecode(resp.body);
-          if (parsed is Map && parsed['message'] != null)
-            msg = parsed['message'].toString();
-        } catch (_) {}
-        throw Exception('Create patient failed: ${resp.statusCode} - $msg');
+        throw Exception('${resp.statusCode}: ${resp.body}');
       }
     } catch (e) {
       rethrow;
     }
   }
 
-  Future<Map<String, dynamic>?> _createCppt({
-    required int patientId,
-    required int perawatId,
+  Future<void> _rollbackPatient(int patientId) async {
+    final url = '${_baseUrlFromEnv()}/patients/$patientId';
+    try {
+      if (kDebugMode) debugPrint("ROLLBACK: Menghapus pasien ID $patientId...");
+      final response = await http.delete(
+        Uri.parse(url),
+        headers: _buildHeaders(),
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        if (kDebugMode)
+          debugPrint("ROLLBACK SUKSES: Pasien $patientId dihapus.");
+      } else {
+        if (kDebugMode) debugPrint("ROLLBACK GAGAL: ${response.body}");
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint("ROLLBACK ERROR: $e");
+    }
+  }
+
+  int? _extractPatientId(Map<String, dynamic>? merged) {
+    if (merged == null) return null;
+
+    if (merged['patient_id'] != null) {
+      return int.tryParse(merged['patient_id'].toString());
+    }
+
+    if (merged['data'] is Map) {
+      final dataObj = merged['data'];
+      if (dataObj['patient_id'] != null) {
+        return int.tryParse(dataObj['patient_id'].toString());
+      }
+      if (dataObj['data'] is Map && dataObj['data']['patient_id'] != null) {
+        return int.tryParse(dataObj['data']['patient_id'].toString());
+      }
+    }
+    return null;
+  }
+
+  Future<int?> _createLaporan({
     required int assessmentId,
+    required int patientId,
     required String query,
   }) async {
     final baseUrl = _baseUrlFromEnv();
-    final url = '$baseUrl/cppt/';
-    final bodyMap = {
-      'patient_id': patientId,
-      'perawat_id': perawatId,
-      'assessment_id': assessmentId,
-      'query': query,
+    final url = '$baseUrl/laporan/';
+
+    final Map<String, dynamic> requestBody = {
+      "assesment_id": assessmentId,
+      "patient_id": patientId,
+      "query": query,
     };
-    final body = jsonEncode(bodyMap);
+
     try {
-      if (kDebugMode) debugPrint('POST $url -> $body');
+      final bodyEncoded = jsonEncode(requestBody);
       final resp = await http.post(
         Uri.parse(url),
         headers: _buildHeaders(),
-        body: body,
+        body: bodyEncoded,
       );
-      if (kDebugMode)
-        debugPrint('CreateCPPT response ${resp.statusCode}: ${resp.body}');
-      if (resp.statusCode == 200 ||
-          resp.statusCode == 201 ||
-          resp.statusCode == 202) {
-        if (resp.body.isEmpty) return {};
+
+      if (resp.statusCode >= 200 && resp.statusCode < 300) {
+        if (resp.body.isEmpty) return null;
         final Map<String, dynamic> data = jsonDecode(resp.body);
-        return data;
+        if (data.containsKey('id')) return int.tryParse(data['id'].toString());
+        if (data.containsKey('data') &&
+            data['data'] is Map &&
+            data['data']['id'] != null) {
+          return int.tryParse(data['data']['id'].toString());
+        }
+        return null;
       } else {
-        String msg = resp.body;
-        try {
-          final parsed = jsonDecode(resp.body);
-          if (parsed is Map && parsed['message'] != null)
-            msg = parsed['message'].toString();
-        } catch (_) {}
-        throw Exception('Create CPPT failed: ${resp.statusCode} - $msg');
+        throw Exception('${resp.statusCode}: ${resp.body}');
       }
     } catch (e) {
       rethrow;
     }
-  }
-
-  int _detectPerawatId(
-    Map<String, dynamic>? merged,
-    Map<String, dynamic>? apiResponse,
-  ) {
-    try {
-      if (merged != null) {
-        final keys = [
-          'perawat_id',
-          'perawatId',
-          'perawat',
-          'created_by',
-          'id_perawat',
-          'user_id',
-          'userId',
-        ];
-        for (final k in keys) {
-          if (merged.containsKey(k)) {
-            final val = merged[k];
-            if (val is int) return val;
-            if (val is String) {
-              final parsed = int.tryParse(val);
-              if (parsed != null) return parsed;
-            }
-          }
-        }
-      }
-
-      if (apiResponse != null) {
-        final keys = [
-          'perawat_id',
-          'perawatId',
-          'perawat',
-          'user_id',
-          'userId',
-        ];
-        for (final k in keys) {
-          if (apiResponse.containsKey(k)) {
-            final val = apiResponse[k];
-            if (val is int) return val;
-            if (val is String) {
-              final parsed = int.tryParse(val);
-              if (parsed != null) return parsed;
-            }
-          }
-        }
-      }
-
-      if (widget.username != null) {
-        final parsed = int.tryParse(widget.username!);
-        if (parsed != null) return parsed;
-      }
-
-      if (widget.token != null && widget.token!.isNotEmpty) {
-        final fromJwt = _extractPerawatIdFromJwt(widget.token);
-        if (fromJwt != null) return fromJwt;
-      }
-    } catch (_) {}
-
-    return 0;
-  }
-
-  int? _extractPerawatIdFromJwt(String? token) {
-    if (token == null || token.isEmpty) return null;
-    try {
-      final parts = token.split('.');
-      if (parts.length < 2) return null;
-      final payload = parts[1];
-      final normalized = base64Url.normalize(payload);
-      final decoded = utf8.decode(base64Url.decode(normalized));
-      final Map<String, dynamic> map = jsonDecode(decoded);
-      final keys = [
-        'perawat_id',
-        'user_id',
-        'id',
-        'sub',
-        'perawatId',
-        'userId',
-      ];
-      for (final k in keys) {
-        if (map.containsKey(k)) {
-          final v = map[k];
-          if (v is int) return v;
-          if (v is String) {
-            final parsed = int.tryParse(v);
-            if (parsed != null) return parsed;
-          }
-        }
-      }
-    } catch (_) {}
-    return null;
   }
 
   void _showErrorSnackBar(String message) {
@@ -372,112 +402,66 @@ class _VocareReport2State extends State<VocareReport2> {
   Map<String, dynamic> _extractIdAndName(Map<String, dynamic>? merged) {
     int? idAssessment;
     String? namaPasien;
-
     if (merged == null) return {'id': null, 'nama': null};
-
     final topId = merged['id'];
-    if (topId != null) {
-      if (topId is int)
-        idAssessment = topId;
-      else
-        idAssessment = int.tryParse(topId.toString());
-    }
-
-    final idCandidates = [
-      'id_assesment',
-      'id_assessment',
-      'assesment_id',
-      'assessment_id',
-      'assessmentId',
-    ];
-    for (final k in idCandidates) {
-      if (idAssessment != null) break;
-      if (merged.containsKey(k)) {
-        final v = merged[k];
-        if (v is int)
-          idAssessment = v;
-        else
-          idAssessment = int.tryParse(v?.toString() ?? '');
-      }
-    }
-
-    final nameCandidates = [
-      'nama_pasien',
-      'nama',
-      'patient_name',
-      'patient',
-      'informasi_umum.nama_pasien',
-      'informasi_umum.nama',
-      'data.nama_pasien',
-      'data.nama',
-    ];
-
-    String? tryNested(String key) {
-      if (key.contains('.')) {
-        final parts = key.split('.');
-        dynamic cur = merged;
-        for (final p in parts) {
-          if (cur is Map && cur.containsKey(p)) {
-            cur = cur[p];
-          } else {
-            cur = null;
-            break;
-          }
+    if (topId != null)
+      idAssessment = (topId is int) ? topId : int.tryParse(topId.toString());
+    if (idAssessment == null) {
+      final idCandidates = [
+        'id_assesment',
+        'id_assessment',
+        'assesment_id',
+        'assessment_id',
+      ];
+      for (final k in idCandidates) {
+        if (merged.containsKey(k)) {
+          final v = merged[k];
+          idAssessment = (v is int) ? v : int.tryParse(v?.toString() ?? '');
+          if (idAssessment != null) break;
         }
-        return cur?.toString();
-      } else {
-        return merged.containsKey(key) ? merged[key]?.toString() : null;
       }
     }
-
+    final nameCandidates = ['nama_pasien', 'nama', 'patient_name'];
     for (final k in nameCandidates) {
-      final candidate = tryNested(k);
-      if (candidate != null && candidate.isNotEmpty) {
-        namaPasien = candidate;
-        break;
+      if (merged.containsKey(k)) {
+        namaPasien = merged[k]?.toString();
+        if (namaPasien != null) break;
       }
     }
-
-    if ((namaPasien == null || namaPasien.isEmpty) &&
-        merged.containsKey('data')) {
-      final d = merged['data'];
-      if (d is String) {
-        try {
-          final decoded = _tryParseLenient(d) ?? jsonDecode(d);
-          if (decoded is Map) {
-            final cand =
-                decoded['nama'] ??
-                decoded['nama_pasien'] ??
-                decoded['patient_name'];
-            if (cand != null) namaPasien = cand.toString();
-          }
-        } catch (_) {}
-      } else if (d is Map<String, dynamic>) {
-        final cand = d['nama'] ?? d['nama_pasien'] ?? d['patient_name'];
-        if (cand != null) namaPasien = cand.toString();
-      }
+    if (namaPasien == null && merged['data'] is Map) {
+      namaPasien = merged['data']['nama'] ?? merged['data']['nama_pasien'];
     }
-
     return {'id': idAssessment, 'nama': namaPasien};
+  }
+
+  Map<String, dynamic>? _tryParseLenient(dynamic raw) {
+    if (raw == null) return null;
+    String s = raw is String ? raw.trim() : raw.toString();
+    if (s.isEmpty) return null;
+    s = s
+        .replaceAll(RegExp(r'^\s*```(?:json)?\s*'), '')
+        .replaceAll(RegExp(r'\s*```\s*$'), '');
+    try {
+      final decoded = jsonDecode(s);
+      if (decoded is Map<String, dynamic>)
+        return Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+    return null;
   }
 
   Future<void> cppt() async {
     final merged = _cachedExtractedFields ?? {};
     final idAndName = _extractIdAndName(merged);
     final idAssessment = idAndName['id'] as int?;
-    final namaPasien = idAndName['nama'] as String?;
+    String? namaPasien = idAndName['nama'] as String?;
 
     if (idAssessment == null) {
-      _showErrorSnackBar(
-        'Gagal: id_assesment tidak ditemukan pada data assessment.',
-      );
+      _showErrorSnackBar('Gagal: id_assesment tidak ditemukan.');
       return;
     }
+
     if (namaPasien == null || namaPasien.isEmpty) {
-      _showErrorSnackBar(
-        'Gagal: nama pasien tidak ditemukan pada data assessment.',
-      );
-      return;
+      namaPasien = "Pasien Baru";
     }
 
     if (widget.token == null || widget.token!.isEmpty) {
@@ -485,61 +469,53 @@ class _VocareReport2State extends State<VocareReport2> {
       return;
     }
 
-    setState(() {
-      _isSaving = true;
-    });
+    if (_nurseAssignedRoom == null) {
+      _showErrorSnackBar('Sedang sinkronisasi data perawat...');
+      await _fetchNurseProfile();
 
-    try {
-      final patientId = await _createPatient(
-        idAssessment: idAssessment,
-        nama: namaPasien,
-      );
-      if (patientId == null)
-        throw Exception(
-          'Server tidak mengembalikan patient id setelah membuat patient.',
+      if (_nurseAssignedRoom == null) {
+        _showErrorSnackBar(
+          'Gagal mendapatkan data ruangan perawat. Tidak dapat melanjutkan.',
         );
-
-      final perawatId = _detectPerawatId(merged, widget.apiResponse);
-      if (perawatId == 0) {
-        if (mounted) {
-          _showErrorSnackBar(
-            'Gagal: perawat_id tidak ditemukan pada data. Pastikan "username" berisi id perawat atau token JWT valid berisi id user.',
-          );
-        }
-        if (mounted)
-          setState(() {
-            _isSaving = false;
-          });
         return;
       }
+    }
 
-      final cpptResp = await _createCppt(
-        patientId: patientId,
-        perawatId: perawatId,
+    setState(() => _isSaving = true);
+
+    int? createdPatientId;
+
+    try {
+      createdPatientId = await _createPatient(
+        idAssessment: idAssessment,
+        nama: namaPasien,
+        sourceData: widget.apiResponse ?? merged,
+      );
+
+      if (createdPatientId == null) {
+        throw Exception('Gagal mendapatkan ID Pasien.');
+      }
+
+      if (kDebugMode) {
+        debugPrint(
+          "Pasien Created ID: $createdPatientId. Mencoba buat laporan...",
+        );
+      }
+
+      final laporanId = await _createLaporan(
         assessmentId: idAssessment,
+        patientId: createdPatientId,
         query: widget.reportText,
       );
 
-      int? cpptId;
-      if (cpptResp != null) {
-        if (cpptResp['id'] != null)
-          cpptId = int.tryParse(cpptResp['id'].toString());
-        if (cpptId == null && cpptResp['cppt_id'] != null)
-          cpptId = int.tryParse(cpptResp['cppt_id'].toString());
-        if (cpptId == null &&
-            cpptResp['data'] is Map &&
-            cpptResp['data']['id'] != null)
-          cpptId = int.tryParse(cpptResp['data']['id'].toString());
+      if (laporanId == null) {
+        throw Exception('Gagal mendapatkan ID Laporan.');
       }
-
-      // === MODIFIKASI: Intervensi creation logic REMOVED ===
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Sukses menyimpan pasien dan CPPT. Lanjutkan ke Intervensi.',
-            ),
+            content: Text('Sukses!'),
             backgroundColor: Colors.green,
           ),
         );
@@ -547,24 +523,40 @@ class _VocareReport2State extends State<VocareReport2> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => VocareReport3(
-              cpptId: cpptId ?? 0,
+            builder: (context) => VocareLaporan(
+              laporanId: laporanId,
               token: widget.token,
-              patientId: patientId,
-              perawatId: perawatId,
-              intervensiId: null,
-              query: widget.reportText,
+              reportText: widget.reportText,
+              user: widget.user,
             ),
           ),
         );
       }
     } catch (e) {
-      if (mounted) _showErrorSnackBar('Gagal menyimpan: $e');
+
+      if (createdPatientId != null) {
+        if (mounted) {
+          _showErrorSnackBar(
+            'Gagal membuat laporan ($e). Membatalkan data pasien...',
+          );
+        }
+
+        await _rollbackPatient(createdPatientId);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Rollback selesai. Silakan coba tekan Next lagi.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          Navigator.pop(context);
+        }
+      } else {
+        if (mounted) _showErrorSnackBar('Error: $e');
+      }
     } finally {
-      if (mounted)
-        setState(() {
-          _isSaving = false;
-        });
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -572,6 +564,8 @@ class _VocareReport2State extends State<VocareReport2> {
     final merged = _cachedExtractedFields ?? {};
     final idAndName = _extractIdAndName(merged);
     final idAssessment = idAndName['id'] as int?;
+
+    final idPatient = _extractPatientId(merged);
 
     if (idAssessment == null) {
       _showErrorSnackBar(
@@ -585,8 +579,10 @@ class _VocareReport2State extends State<VocareReport2> {
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         title: const Text('Konfirmasi Hapus'),
-        content: const Text(
-          'Apakah Anda yakin ingin menghapus assessment ini? Tindakan ini tidak bisa dibatalkan.',
+        content: Text(
+          idPatient != null
+              ? 'Data Pasien dan Assessment akan dihapus permanen. Lanjutkan?'
+              : 'Apakah Anda yakin ingin menghapus assessment ini? Tindakan ini tidak bisa dibatalkan.',
         ),
         actions: [
           TextButton(
@@ -595,6 +591,7 @@ class _VocareReport2State extends State<VocareReport2> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Hapus'),
           ),
         ],
@@ -603,363 +600,80 @@ class _VocareReport2State extends State<VocareReport2> {
 
     if (confirm != true) return;
 
-    setState(() {
-      _isSaving = true;
-    });
+    setState(() => _isSaving = true);
 
     try {
       final baseUrl = _baseUrlFromEnv();
+      final headers = _buildHeaders();
+
+      if (idPatient != null) {
+        final urlPatient = '$baseUrl/patients/$idPatient';
+        try {
+          if (kDebugMode) debugPrint('DELETE PATIENT: $urlPatient');
+          final respPatient = await http.delete(
+            Uri.parse(urlPatient),
+            headers: headers,
+          );
+
+          if (respPatient.statusCode >= 200 && respPatient.statusCode < 300) {
+            if (kDebugMode) debugPrint('Berhasil hapus pasien ID: $idPatient');
+          } else {
+            if (kDebugMode)
+              debugPrint('Gagal hapus pasien: ${respPatient.body}');
+          }
+        } catch (e) {
+          if (kDebugMode) debugPrint('Error delete patient: $e');
+        }
+      }
+
       final endpointsToTry = [
         '$baseUrl/assesments/$idAssessment',
         '$baseUrl/assessments/$idAssessment',
       ];
 
-      http.Response? lastResp;
+      bool deletedAssessment = false;
       for (final url in endpointsToTry) {
         try {
-          if (kDebugMode) debugPrint('DELETE $url');
-          final resp = await http.delete(
-            Uri.parse(url),
-            headers: _buildHeaders(),
-          );
-          lastResp = resp;
+          if (kDebugMode) debugPrint('DELETE ASSESSMENT: $url');
+          final resp = await http.delete(Uri.parse(url), headers: headers);
+
           if (resp.statusCode >= 200 && resp.statusCode < 300) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Assessment berhasil dihapus.'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-              Navigator.of(context).pop();
-            }
-            return;
-          } else {
-            if (kDebugMode)
-              debugPrint('DELETE failed ${resp.statusCode}: ${resp.body}');
+            deletedAssessment = true;
+            break;
           }
         } catch (e) {
-          if (kDebugMode) debugPrint('DELETE attempt error for $url -> $e');
+          if (kDebugMode) debugPrint('DELETE attempt error: $e');
         }
       }
 
-      String msg = 'Gagal menghapus assessment.';
-      if (lastResp != null) {
-        try {
-          final parsed = jsonDecode(lastResp.body);
-          if (parsed is Map && parsed['message'] != null)
-            msg = parsed['message'].toString();
-          else
-            msg = 'Server: ${lastResp.statusCode}';
-        } catch (_) {
-          msg = 'Server: ${lastResp.statusCode}';
-        }
-      }
-      if (mounted) _showErrorSnackBar('$msg');
-    } finally {
-      if (mounted)
-        setState(() {
-          _isSaving = false;
-        });
-    }
-  }
-
-  // === _saveRencanaAsuhan_StrictPut tetap sama ===
-  Future<void> _saveRencanaAsuhan_StrictPut() async {
-    final merged = _cachedExtractedFields ?? {};
-    final idAndName = _extractIdAndName(merged);
-    final int? idAssessment = idAndName['id'] as int?;
-
-    if (idAssessment == null) {
-      _showErrorSnackBar(
-        'Gagal: id_assesment tidak ditemukan, tidak dapat menyimpan rencana asuhan.',
-      );
-      return;
-    }
-
-    setState(() => _isSaving = true);
-    final baseUrl = _baseUrlFromEnv();
-    final url = '$baseUrl/assesments/$idAssessment';
-
-    try {
-      // 1) GET current resource (lenient parsing)
-      if (kDebugMode) debugPrint('GET $url');
-      final getResp = await http.get(Uri.parse(url), headers: _buildHeaders());
-
-      if (kDebugMode)
-        debugPrint('GET resp ${getResp.statusCode}: ${getResp.body}');
-
-      Map<String, dynamic> serverObj = {};
-      dynamic getDecoded;
-
-      if (getResp.statusCode >= 200 &&
-          getResp.statusCode < 300 &&
-          getResp.body.isNotEmpty) {
-        getDecoded =
-            _tryParseLenient(getResp.body) ??
-            (() {
-              try {
-                return jsonDecode(getResp.body);
-              } catch (_) {
-                return null;
-              }
-            })();
-
-        if (getDecoded is Map<String, dynamic>) {
-          serverObj = Map<String, dynamic>.from(getDecoded);
-        } else {
-          serverObj = Map<String, dynamic>.from(merged);
+      if (deletedAssessment) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Data berhasil dihapus.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.of(context).pop();
         }
       } else {
-        if (kDebugMode)
-          debugPrint(
-            'GET failed ${getResp.statusCode}: ${getResp.body}. Using cached data.',
+        if (idPatient != null) {
+          _showErrorSnackBar(
+            'Pasien mungkin terhapus, namun Assessment gagal dihapus.',
           );
-        serverObj = Map<String, dynamic>.from(merged);
-      }
-
-      // Normalize top-level "data" into Map so we can find the nested asesmen object
-      Map<String, dynamic> normalizedTopData = {};
-      if (serverObj['data'] != null) {
-        if (serverObj['data'] is String) {
-          normalizedTopData =
-              _tryParseLenient(serverObj['data']) ??
-              (() {
-                try {
-                  final d = jsonDecode(serverObj['data']);
-                  return (d is Map<String, dynamic>) ? d : <String, dynamic>{};
-                } catch (_) {
-                  return <String, dynamic>{};
-                }
-              })();
-        } else if (serverObj['data'] is Map<String, dynamic>) {
-          normalizedTopData = Map<String, dynamic>.from(serverObj['data']);
+          Navigator.of(context).pop();
+        } else {
+          _showErrorSnackBar('Gagal menghapus assessment.');
         }
       }
-
-      // level2 should be the object that contains 'asesmen_awal_keperawatan'
-      Map<String, dynamic> level2 = {};
-
-      try {
-        // If normalizedTopData contains 'data' and that is Map -> use it
-        if (normalizedTopData['data'] is Map<String, dynamic>) {
-          level2 = Map<String, dynamic>.from(normalizedTopData['data']);
-        } else if (normalizedTopData['asesmen_awal_keperawatan']
-            is Map<String, dynamic>) {
-          // already the desired object
-          level2 = Map<String, dynamic>.from(normalizedTopData);
-        } else if (serverObj['data'] is Map &&
-            (serverObj['data']['data'] is Map)) {
-          level2 = Map<String, dynamic>.from(serverObj['data']['data'] as Map);
-        } else if (serverObj['data'] is Map &&
-            serverObj['data']['asesmen_awal_keperawatan'] is Map) {
-          level2 = Map<String, dynamic>.from(serverObj['data'] as Map);
-        }
-      } catch (_) {
-        level2 = {};
-      }
-
-      // ensure asesmen_awal_keperawatan exists
-      level2['asesmen_awal_keperawatan'] ??= <String, dynamic>{};
-      final Map<String, dynamic> asesmen = Map<String, dynamic>.from(
-        level2['asesmen_awal_keperawatan'] as Map,
-      );
-
-      asesmen['rencana_asuhan_keperawatan'] = List<dynamic>.from(
-        _rencanaAsuhan,
-      );
-
-      // put back
-      level2['asesmen_awal_keperawatan'] = asesmen;
-
-      // Build the fenced JSON payload where top-level 'data' is a fenced string containing only level2
-      final prettyLevel2 = const JsonEncoder.withIndent('  ').convert(level2);
-      final fencedLevel2 = '```json\n$prettyLevel2\n```';
-
-      // Determine top-level id / perawat / tanggal to include in payload
-      final dynamic topId = serverObj['id'] ?? merged['id'] ?? idAssessment;
-      final dynamic perawatTop =
-          serverObj['perawat'] ??
-          merged['perawat'] ??
-          merged['perawatId'] ??
-          widget.username ??
-          serverObj['user'] ??
-          serverObj['user_id'];
-      final dynamic tanggalTop =
-          serverObj['tanggal'] ??
-          merged['tanggal'] ??
-          DateTime.now().toIso8601String();
-
-      final List<Map<String, dynamic>> payloadCandidates = [];
-
-      // Candidate 1: top-level data = fencedLevel2 (preferred, matches your required format)
-      final candidate1 = <String, dynamic>{};
-      candidate1.addAll(serverObj);
-      candidate1['data'] = fencedLevel2;
-      if (topId != null) candidate1['id'] = topId;
-      if (perawatTop != null) candidate1['perawat'] = perawatTop.toString();
-      if (tanggalTop != null) candidate1['tanggal'] = tanggalTop.toString();
-      payloadCandidates.add(candidate1);
-
-      // Candidate 2: top-level data = raw JSON string of level2 (no fences)
-      final candidate2 = <String, dynamic>{};
-      candidate2.addAll(serverObj);
-      candidate2['data'] = jsonEncode(level2);
-      if (topId != null) candidate2['id'] = topId;
-      if (perawatTop != null) candidate2['perawat'] = perawatTop.toString();
-      if (tanggalTop != null) candidate2['tanggal'] = tanggalTop.toString();
-      payloadCandidates.add(candidate2);
-
-      // Candidate 3: top-level data = nested map (level2)
-      final candidate3 = <String, dynamic>{};
-      candidate3.addAll(serverObj);
-      candidate3['data'] = level2;
-      if (topId != null) candidate3['id'] = topId;
-      if (perawatTop != null) candidate3['perawat'] = perawatTop.toString();
-      if (tanggalTop != null) candidate3['tanggal'] = tanggalTop.toString();
-      payloadCandidates.add(candidate3);
-
-      http.Response? putResp;
-      String lastErr = '';
-
-      for (final candidate in payloadCandidates) {
-        try {
-          final body = jsonEncode(candidate);
-
-          if (kDebugMode) {
-            debugPrint('Trying PUT $url (payload length: ${body.length}).');
-            final preview = body.length > 1500
-                ? body.substring(0, 1500) + '... (truncated)'
-                : body;
-            debugPrint('Payload preview: $preview');
-          }
-
-          putResp = await http.put(
-            Uri.parse(url),
-            headers: _buildHeaders(),
-            body: body,
-          );
-
-          if (kDebugMode)
-            debugPrint('PUT resp ${putResp.statusCode}: ${putResp.body}');
-
-          if (putResp.statusCode >= 200 && putResp.statusCode < 300) {
-            // success — update cache so UI reflects new rencana
-            _cachedExtractedFields ??= {};
-            _cachedExtractedFields!['rencana_asuhan_list'] = List<String>.from(
-              _rencanaAsuhan,
-            );
-
-            // try to mirror nested positions in cache
-            try {
-              _cachedExtractedFields!['data'] ??= <String, dynamic>{};
-              final l1Cache = _cachedExtractedFields!['data'];
-              if (l1Cache is Map) {
-                // ensure nested shape exists similar to level2
-                l1Cache['data'] ??= <String, dynamic>{};
-                final l2Cache = l1Cache['data'];
-                if (l2Cache is Map) {
-                  l2Cache['asesmen_awal_keperawatan'] ??= <String, dynamic>{};
-                  final am = Map<String, dynamic>.from(
-                    l2Cache['asesmen_awal_keperawatan'] as Map,
-                  );
-                  am['rencana_asuhan_keperawatan'] = List<dynamic>.from(
-                    _rencanaAsuhan,
-                  );
-                  l2Cache['asesmen_awal_keperawatan'] = am;
-                  l1Cache['data'] = l2Cache;
-                  _cachedExtractedFields!['data'] = l1Cache;
-                }
-              }
-            } catch (_) {}
-
-            if (mounted)
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Rencana asuhan berhasil disimpan.'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            return; // done
-          } else {
-            String msg = 'Server: ${putResp.statusCode}';
-            try {
-              final parsed = jsonDecode(putResp.body);
-              if (parsed is Map && parsed['message'] != null)
-                msg = parsed['message'].toString();
-              else
-                msg = 'Server: ${putResp.statusCode}';
-            } catch (_) {
-              msg = 'Server: ${putResp.statusCode}';
-            }
-            lastErr = msg + ' - ' + putResp.body;
-            if (kDebugMode) debugPrint('PUT candidate failed: $lastErr');
-            // try next candidate
-          }
-        } catch (e, st) {
-          lastErr = 'PUT attempt exception: $e';
-          if (kDebugMode) {
-            debugPrint(lastErr);
-            debugPrint(st.toString());
-          }
-          // try next candidate
-        }
-      }
-
-      if (mounted)
-        _showErrorSnackBar('Gagal menyimpan rencana asuhan: $lastErr');
-    } catch (e, st) {
-      if (kDebugMode) {
-        debugPrint('Error _saveRencanaAsuhan_StrictPut: $e');
-        debugPrint(st.toString());
-      }
-      if (mounted) _showErrorSnackBar('Gagal menyimpan rencana asuhan: $e');
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
 
-  Map<String, dynamic>? _tryParseLenient(dynamic raw) {
-    if (raw == null) return null;
-    String s = raw is String ? raw.trim() : raw.toString();
-    if (s.isEmpty) return null;
-
-    s = s.replaceAll(RegExp(r'^\s*```(?:json)?\s*'), '');
-    s = s.replaceAll(RegExp(r'\s*```\s*\$'), '');
-
-    try {
-      final decoded = jsonDecode(s);
-      if (decoded is Map<String, dynamic>)
-        return Map<String, dynamic>.from(decoded);
-      if (decoded is List) return {'_list': decoded};
-    } catch (_) {}
-
-    final firstBrace = s.indexOf('{');
-    final lastBrace = s.lastIndexOf('}');
-    if (firstBrace != -1 && lastBrace != -1 && lastBrace > firstBrace) {
-      final sub = s.substring(firstBrace, lastBrace + 1);
-      try {
-        final decodedSub = jsonDecode(sub);
-        if (decodedSub is Map<String, dynamic>)
-          return Map<String, dynamic>.from(decodedSub);
-      } catch (_) {}
-    }
-
-    try {
-      final replaced = s.replaceAll("'", '"');
-      final decoded = jsonDecode(replaced);
-      if (decoded is Map<String, dynamic>)
-        return Map<String, dynamic>.from(decoded);
-    } catch (_) {}
-
-    return null;
-  }
-
   @override
   Widget build(BuildContext context) {
     final extractedFields = _cachedExtractedFields ?? {};
-    final idAndName = _extractIdAndName(extractedFields);
-    final idAssessment = idAndName['id'] as int?;
 
     return Stack(
       children: [
@@ -972,9 +686,6 @@ class _VocareReport2State extends State<VocareReport2> {
               style: TextStyle(fontSize: 20, color: _titleColor),
             ),
             backgroundColor: _backgroundColor,
-            flexibleSpace: Container(
-              decoration: const BoxDecoration(color: _backgroundColor),
-            ),
           ),
           body: SafeArea(
             child: Padding(
@@ -984,6 +695,54 @@ class _VocareReport2State extends State<VocareReport2> {
               child: ListView(
                 padding: const EdgeInsets.only(bottom: 18, top: 10),
                 children: [
+                  // INDIKATOR DEBUG RUANGAN
+                  if (_nurseAssignedRoom != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.green[100],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          "Ruangan Aktif: $_nurseAssignedRoom",
+                          style: TextStyle(
+                            color: Colors.green[900],
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (_nurseAssignedRoom == null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.red[100],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              "Memuat data ruangan...",
+                              style: TextStyle(
+                                color: Colors.red[900],
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
                   const SizedBox(height: 6),
                   const Text(
                     'Assessment',
@@ -1019,7 +778,6 @@ class _VocareReport2State extends State<VocareReport2> {
               ),
             ),
           ),
-
           bottomNavigationBar: SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(
@@ -1032,15 +790,12 @@ class _VocareReport2State extends State<VocareReport2> {
                   children: [
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: (_isSaving || idAssessment == null)
-                            ? null
-                            : _deleteAssessment,
+                        onPressed: (_isSaving) ? null : _deleteAssessment,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.red,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          elevation: 0,
                         ),
                         child: const Text(
                           'Hapus',
@@ -1053,15 +808,17 @@ class _VocareReport2State extends State<VocareReport2> {
                       ),
                     ),
                     const SizedBox(width: 8),
+
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: _isSaving ? null : cppt,
+                        onPressed: (_isSaving || _nurseAssignedRoom == null)
+                            ? null
+                            : cppt,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _buttonSaveColor,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          elevation: 0,
                         ),
                         child: const Text(
                           'Next',
@@ -1080,16 +837,15 @@ class _VocareReport2State extends State<VocareReport2> {
           ),
         ),
 
-        if (_isSaving) ...[
-          const ModalBarrier(dismissible: false, color: Colors.black45),
-          const Center(
-            child: SizedBox(
-              height: 64,
-              width: 64,
-              child: CircularProgressIndicator(strokeWidth: 4),
+        if (_isSaving)
+          Container(
+            color: Colors.black.withOpacity(0.5),
+            width: double.infinity,
+            height: double.infinity,
+            child: const Center(
+              child: CircularProgressIndicator(color: Colors.white),
             ),
           ),
-        ],
       ],
     );
   }

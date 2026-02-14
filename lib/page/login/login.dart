@@ -135,7 +135,7 @@ class _LoginState extends State<Login> {
   final Color _primaryColor = const Color(0xFF093275);
 
   bool _isLoading = false;
-  bool _obscureText = true; 
+  bool _obscureText = true;
 
   void _showSnack(String msg, {Color bg = Colors.red}) {
     ScaffoldMessenger.of(
@@ -249,9 +249,11 @@ class _LoginState extends State<Login> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
       backgroundColor: _primaryColor,
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           Container(
@@ -261,26 +263,20 @@ class _LoginState extends State<Login> {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFFE3F2FD), 
-                  Color(0xFFBBDEFB), 
-                ],
+                colors: [Color(0xFFE3F2FD), Color(0xFFBBDEFB)],
               ),
             ),
           ),
 
-          // 2. Konten Utama
           SafeArea(
             bottom: false,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.only(
-                    left: 24,
-                    right: 24,
-                    top: 30,
-                    bottom: 30,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 30,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -304,6 +300,7 @@ class _LoginState extends State<Login> {
 
                 Expanded(
                   child: Container(
+                    margin: const EdgeInsets.only(bottom: 100),
                     width: double.infinity,
                     decoration: const BoxDecoration(
                       color: Colors.white,
@@ -313,9 +310,11 @@ class _LoginState extends State<Login> {
                       ),
                     ),
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 30,
-                        vertical: 40,
+                      padding: EdgeInsets.only(
+                        left: 30,
+                        right: 30,
+                        top: 40,
+                        bottom: bottomPadding + 20,
                       ),
                       child: Column(
                         children: [
@@ -331,9 +330,9 @@ class _LoginState extends State<Login> {
                           const SizedBox(height: 40),
 
                           _buildInputGroup(
-                            label: "Email",
+                            label: "Username",
                             controller: _usernameController,
-                            hint: "Masukkan Email",
+                            hint: "Masukkan Username",
                           ),
 
                           const SizedBox(height: 20),
@@ -384,7 +383,49 @@ class _LoginState extends State<Login> {
                     ),
                   ),
                 ),
-                SizedBox(height: size.height * 0.1),
+              ],
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 20,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      child: Image.asset('assets/icon.png'),
+                    ),
+
+                    const SizedBox(width: 10),
+                    Container(
+                      width: 40,
+                      height: 40,
+                      child: Image.asset('assets/unhas.png'),
+                    ),
+                  ],
+                ),
+                const Text(
+                  "Copyright 2026 @ VOCARE Universitas Hasanuddin",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Text(
+                  "Penelitian Tesis",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ],
             ),
           ),

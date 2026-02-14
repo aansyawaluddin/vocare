@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:vocare/common/type.dart';
 import 'package:vocare/page/perawat/inap/Detail/detail_laporan.dart';
-import 'package:vocare/page/perawat/inap/voice.dart';
 
 class DaftarRiwayatAdminPage extends StatefulWidget {
   final User user;
@@ -30,7 +29,6 @@ class _DaftarRiwayatPageState extends State<DaftarRiwayatAdminPage> {
   String? _error;
   List<Laporan> _laporanList = [];
 
-  // --- Constants for UI styling ---
   static const background = Color(0xFFDFF0FF);
   static const cardBorder = Color(0xFFCED7E8);
   static const headingBlue = Color(0xFF0F4C81);

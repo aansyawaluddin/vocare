@@ -25,11 +25,8 @@ class AddUserDialog extends StatefulWidget {
     return showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AddUserDialog(
-        isCompact: isCompact,
-        navy: navy,
-        cardBlue: cardBlue,
-      ),
+      builder: (ctx) =>
+          AddUserDialog(isCompact: isCompact, navy: navy, cardBlue: cardBlue),
     );
   }
 
@@ -39,22 +36,28 @@ class AddUserDialog extends StatefulWidget {
 
 class _AddUserDialogState extends State<AddUserDialog> {
   final _formKey = GlobalKey<FormState>();
+
+  // 1. Tambahkan controller untuk ruangan
   final namaCtrl = TextEditingController();
   final emailCtrl = TextEditingController();
+  final ruanganCtrl = TextEditingController();
   final passwordCtrl = TextEditingController();
+
   String selectedRole = 'Perawat';
   bool submitting = false;
   String? errorMsg;
 
   final Map<String, String> roleMap = {
     'Admin': 'admin',
-    'Perawat': 'user', 
+    'Perawat': 'user',
     'Ketua Tim': 'ketim',
   };
 
+  // 2. Update parameter fungsi untuk menerima ruangan
   Future<void> _createUserOnServer({
     required String username,
     required String email,
+    required String ruangan,
     required String password,
     required String role,
   }) async {
@@ -64,9 +67,11 @@ class _AddUserDialogState extends State<AddUserDialog> {
       throw Exception('No access token found. Silakan login ulang.');
     }
 
+    // 3. Masukkan ruangan ke dalam body JSON
     final body = json.encode({
       'username': username,
       'email': email,
+      'ruangan': ruangan,
       'password': password,
       'role': role,
     });
@@ -86,9 +91,12 @@ class _AddUserDialogState extends State<AddUserDialog> {
       String serverMsg = resp.body;
       try {
         final js = json.decode(resp.body);
-        if (js is Map && js['message'] != null) serverMsg = js['message'].toString();
+        if (js is Map && js['message'] != null)
+          serverMsg = js['message'].toString();
       } catch (_) {}
-      throw Exception('Gagal menambahkan pengguna: ${resp.statusCode} - $serverMsg');
+      throw Exception(
+        'Gagal menambahkan pengguna: ${resp.statusCode} - $serverMsg',
+      );
     }
   }
 
@@ -102,9 +110,11 @@ class _AddUserDialogState extends State<AddUserDialog> {
     });
 
     try {
+      // 4. Kirim data ruangan saat submit
       await _createUserOnServer(
         username: namaCtrl.text.trim(),
         email: emailCtrl.text.trim(),
+        ruangan: ruanganCtrl.text.trim(),
         password: passwordCtrl.text,
         role: rolePayload,
       );
@@ -137,7 +147,10 @@ class _AddUserDialogState extends State<AddUserDialog> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 12),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.12),
+                  blurRadius: 12,
+                ),
               ],
             ),
             child: Form(
@@ -147,76 +160,146 @@ class _AddUserDialogState extends State<AddUserDialog> {
                 children: [
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: Text('Tambah Pengguna',
-                        style: TextStyle(
-                          fontSize: widget.isCompact ? 16 : 18,
-                          fontWeight: FontWeight.w700,
-                          color: widget.navy,
-                        )),
+                    child: Text(
+                      'Tambah Pengguna',
+                      style: TextStyle(
+                        fontSize: widget.isCompact ? 16 : 18,
+                        fontWeight: FontWeight.w700,
+                        color: widget.navy,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 12),
+
+                  // Input Username
                   TextFormField(
                     controller: namaCtrl,
-                    decoration: const InputDecoration(labelText: 'Username', hintText: 'Masukkan Username'),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Username wajib' : null,
+                    decoration: const InputDecoration(
+                      labelText: 'Username',
+                      hintText: 'Masukkan Username',
+                    ),
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Username wajib'
+                        : null,
                   ),
                   const SizedBox(height: 12),
+
+                  // Input Email
                   TextFormField(
                     controller: emailCtrl,
                     keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(labelText: 'Email', hintText: 'Masukkan Email'),
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      hintText: 'Masukkan Email',
+                    ),
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) return 'Email wajib';
                       final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
-                      if (!emailRegex.hasMatch(v.trim())) return 'Email tidak valid';
+                      if (!emailRegex.hasMatch(v.trim()))
+                        return 'Email tidak valid';
                       return null;
                     },
                   ),
                   const SizedBox(height: 12),
+
+                  // Input Role
                   DropdownButtonFormField<String>(
                     value: selectedRole,
-                    items: roleMap.keys.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                    items: roleMap.keys
+                        .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                        .toList(),
                     decoration: const InputDecoration(labelText: 'Role'),
                     onChanged: (v) {
                       if (v != null) setState(() => selectedRole = v);
                     },
-                    validator: (v) => (v == null || v.isEmpty) ? 'Pilih role' : null,
+                    validator: (v) =>
+                        (v == null || v.isEmpty) ? 'Pilih role' : null,
                   ),
                   const SizedBox(height: 12),
+
+                  // 5. Input Field Baru: Ruangan
+                  TextFormField(
+                    controller: ruanganCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Ruangan',
+                      hintText: 'Contoh: Ruangan 1',
+                    ),
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Ruangan wajib diisi'
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Input Password
                   TextFormField(
                     controller: passwordCtrl,
-                    decoration: const InputDecoration(labelText: 'Password', hintText: 'Masukkan Password'),
+                    decoration: const InputDecoration(
+                      labelText: 'Password',
+                      hintText: 'Masukkan Password',
+                    ),
                     obscureText: true,
-                    validator: (v) => (v == null || v.trim().length < 6) ? 'Password minimal 6 karakter' : null,
+                    validator: (v) => (v == null || v.trim().length < 6)
+                        ? 'Password minimal 6 karakter'
+                        : null,
                   ),
                   const SizedBox(height: 18),
+
                   if (errorMsg != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8.0),
-                      child: Text(errorMsg!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                      child: Text(
+                        errorMsg!,
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                      ),
                     ),
+
+                  // Tombol Submit
                   SizedBox(
                     width: double.infinity,
                     height: 48,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: widget.navy,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                       onPressed: submitting ? null : _submit,
                       child: submitting
                           ? const SizedBox(
                               width: 20,
                               height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation(
+                                  Colors.white,
+                                ),
+                              ),
                             )
-                          : const Text('Submit', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
+                          : const Text(
+                              'Submit',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
                     ),
                   ),
                   const SizedBox(height: 6),
+
+                  // Tombol Batal
                   TextButton(
-                    onPressed: submitting ? null : () => Navigator.of(context).pop(false),
-                    child: const Text('Batal', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+                    onPressed: submitting
+                        ? null
+                        : () => Navigator.of(context).pop(false),
+                    child: const Text(
+                      'Batal',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                    ),
                   ),
                 ],
               ),

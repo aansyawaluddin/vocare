@@ -3,12 +3,22 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:vocare/common/type.dart';
+import 'package:vocare/page/perawat/laporan/cppt_and_intervensi.dart';
 
 class VocareLaporan extends StatefulWidget {
   final int laporanId;
   final String? token;
+  final String reportText;
+  final User user;
 
-  const VocareLaporan({super.key, required this.laporanId, this.token});
+  const VocareLaporan({
+    super.key,
+    required this.laporanId,
+    this.token,
+    required this.reportText,
+    required this.user,
+  });
 
   @override
   State<VocareLaporan> createState() => _VocareLaporanState();
@@ -18,7 +28,7 @@ class _VocareLaporanState extends State<VocareLaporan> {
   static const background = Color.fromARGB(255, 223, 240, 255);
   static const cardBorder = Color(0xFFCED7E8);
   static const headingBlue = Color(0xFF0F4C81);
-  static const titleColor = Color(0xFF093275);
+  static const titleColor = Colors.green;
   static const appBarBackground = Color(0xFFD7E2FD);
 
   Map<String, dynamic>? _laporanData;
@@ -26,14 +36,19 @@ class _VocareLaporanState extends State<VocareLaporan> {
   String? _error;
   bool _isUpdatingLaporan = false;
 
+  bool _isPostingCppt = false;
+
   late final TextEditingController _sdkiController;
   late final TextEditingController _slkiController;
   late final TextEditingController _sikiController;
   late final TextEditingController _tindakanLanjutanController;
 
+  late final String _baseUrl;
+
   @override
   void initState() {
     super.initState();
+    _baseUrl = _baseUrlFromEnv();
     _sdkiController = TextEditingController();
     _slkiController = TextEditingController();
     _sikiController = TextEditingController();
@@ -52,9 +67,7 @@ class _VocareLaporanState extends State<VocareLaporan> {
   }
 
   String _baseUrlFromEnv() {
-    return dotenv.env['API_BASE_URL'] ??
-        dotenv.env['API_URL'] ??
-        'http://your-api-host';
+    return dotenv.env['API_BASE_URL'] ?? dotenv.env['API_URL'] ?? '';
   }
 
   Map<String, String> _buildHeaders({bool isPutting = false}) {
@@ -68,13 +81,46 @@ class _VocareLaporanState extends State<VocareLaporan> {
     return headers;
   }
 
+  String _formatContentToList(String? content) {
+    if (content == null || content.isEmpty || content == '[]') {
+      return '';
+    }
+
+    List<String> lines = [];
+
+    try {
+      if (content.trim().startsWith('[') && content.trim().endsWith(']')) {
+        List<dynamic> list = jsonDecode(content);
+        lines = list.map((e) => e.toString().trim()).toList();
+      } else {
+        String cleaned = content.replaceAll(RegExp(r'[\[\]"]'), '');
+        lines = cleaned.split(',').map((e) => e.trim()).toList();
+      }
+
+      List<String> cleanLines = lines
+          .map((line) {
+            String noNumber = line.replaceAll(
+              RegExp(r'^\d+(\.\d+)*\s*\.?\s*'),
+              '',
+            );
+            return noNumber.trim();
+          })
+          .where((line) => line.isNotEmpty)
+          .toList();
+
+      return cleanLines.join('\n');
+    } catch (e) {
+      return content.replaceAll(RegExp(r'^\d+\.\s*', multiLine: true), '');
+    }
+  }
+
   Future<void> _fetchLaporan() async {
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
-    final url = '${_baseUrlFromEnv()}/laporan/${widget.laporanId}';
+    final url = '$_baseUrl/laporan/${widget.laporanId}';
 
     try {
       if (kDebugMode) debugPrint('GET $url');
@@ -85,43 +131,46 @@ class _VocareLaporanState extends State<VocareLaporan> {
         final data = body.containsKey('data') && body['data'] is Map
             ? body['data']
             : body;
+
         setState(() {
           _laporanData = data;
-          // MODIFICATION: Populate controllers with data from the API
-          _sdkiController.text = data['SDKI']?.toString() ?? '';
-          _slkiController.text = data['SLKI']?.toString() ?? '';
-          _sikiController.text = data['SIKI']?.toString() ?? '';
-          _tindakanLanjutanController.text = data['tindakan_lanjutan']?.toString() ?? '';
+          _sdkiController.text = _formatContentToList(data['SDKI']?.toString());
+          _slkiController.text = _formatContentToList(data['SLKI']?.toString());
+          _sikiController.text = _formatContentToList(data['SIKI']?.toString());
+          _tindakanLanjutanController.text =
+              data['tindakan_lanjutan']?.toString() ??
+              data['plan']?.toString() ??
+              '';
         });
       } else {
         throw Exception('Gagal memuat laporan: Status ${response.statusCode}');
       }
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-      });
+      setState(() => _error = e.toString());
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
   }
 
   Future<void> _updateLaporan() async {
     setState(() => _isUpdatingLaporan = true);
 
-    final url = '${_baseUrlFromEnv()}/laporan/${widget.laporanId}';
+    final url = '$_baseUrl/laporan/${widget.laporanId}';
     final headers = _buildHeaders(isPutting: true);
+
     final body = jsonEncode({
       'SDKI': _sdkiController.text,
       'SLKI': _slkiController.text,
       'SIKI': _sikiController.text,
-      'tindakan_lanjutan': _tindakanLanjutanController.text,
     });
 
     try {
       if (kDebugMode) debugPrint('PUT $url -> $body');
-      final response = await http.put(Uri.parse(url), headers: headers, body: body);
+      final response = await http.put(
+        Uri.parse(url),
+        headers: headers,
+        body: body,
+      );
 
       if (!mounted) return;
 
@@ -134,7 +183,8 @@ class _VocareLaporanState extends State<VocareLaporan> {
         );
       } else {
         throw Exception(
-            'Gagal memperbarui laporan: Status ${response.statusCode}');
+          'Gagal memperbarui laporan: Status ${response.statusCode}',
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -143,27 +193,96 @@ class _VocareLaporanState extends State<VocareLaporan> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isUpdatingLaporan = false);
-      }
+      if (mounted) setState(() => _isUpdatingLaporan = false);
     }
   }
 
+  Future<void> _processCppt() async {
+    if (_laporanData == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Data laporan belum siap.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
-  String _formatContentToList(String? content) {
-    if (content == null || content.isEmpty || content == '{}') {
-      return 'Tidak ada data';
-    }
-    String cleaned = content.replaceAll(RegExp(r'^\{|\}$'), '');
-    List<String> items = cleaned.split(',');
-    List<String> formattedItems = [];
-    for (int i = 0; i < items.length; i++) {
-      String item = items[i].trim().replaceAll(RegExp(r'^"|"'), '');
-      if (item.isNotEmpty) {
-        formattedItems.add('${i + 1}. $item');
+    setState(() => _isPostingCppt = true);
+
+    final url = '$_baseUrl/cppt/';
+    final headers = _buildHeaders(isPutting: true);
+
+    int patientId =
+        int.tryParse(_laporanData!['patient_id']?.toString() ?? '0') ?? 0;
+
+    final body = jsonEncode({
+      "patient_id": patientId,
+      "query": widget.reportText,
+    });
+
+    try {
+      if (kDebugMode) debugPrint('POST CPPT $url -> $body');
+
+      final response = await http.post(
+        Uri.parse(url),
+        headers: headers,
+        body: body,
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final Map<String, dynamic> data = jsonDecode(response.body);
+
+        int? newCpptId;
+        if (data.containsKey('id')) {
+          newCpptId = int.tryParse(data['id'].toString());
+        } else if (data.containsKey('data') && data['data'] is Map) {
+          newCpptId = int.tryParse(data['data']['id'].toString());
+        }
+
+        if (newCpptId == null)
+          throw Exception("ID CPPT tidak ditemukan di response.");
+
+        int perawatId =
+            int.tryParse(
+              _laporanData!['perawat_id']?.toString() ??
+                  _laporanData!['user_id']?.toString() ??
+                  '0',
+            ) ??
+            0;
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VocareReport3(
+              cpptId: newCpptId!,
+              patientId: patientId,
+              perawatId: perawatId,
+              query: widget.reportText,
+              token: widget.token,
+              user: widget.user,
+            ),
+          ),
+        );
+      } else {
+        throw Exception(
+          "Gagal POST CPPT (${response.statusCode}): ${response.body}",
+        );
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error CPPT: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isPostingCppt = false);
     }
-    return formattedItems.join('\n');
   }
 
   Widget _buildSection(String title, TextEditingController controller) {
@@ -213,8 +332,10 @@ class _VocareLaporanState extends State<VocareLaporan> {
                 borderSide: const BorderSide(color: headingBlue, width: 2),
               ),
               isDense: true,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
             ),
           ),
         ],
@@ -223,21 +344,17 @@ class _VocareLaporanState extends State<VocareLaporan> {
   }
 
   Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_error != null) {
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_error != null)
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(20.0),
           child: Text(_error!, textAlign: TextAlign.center),
         ),
       );
-    }
-    if (_laporanData == null) {
+    if (_laporanData == null)
       return const Center(child: Text('Tidak ada data laporan ditemukan.'));
-    }
-    
+
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
@@ -253,23 +370,21 @@ class _VocareLaporanState extends State<VocareLaporan> {
           'SIKI (Standar Intervensi Keperawatan Indonesia)',
           _sikiController,
         ),
-        _buildSection(
-          'Tindakan Lanjutan',
-          _tindakanLanjutanController,
-        ),
       ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    bool isBusy = _isLoading || _isUpdatingLaporan || _isPostingCppt;
+
     return Scaffold(
       backgroundColor: background,
       appBar: AppBar(
         titleSpacing: 60,
         title: const Text(
           'Hasil Laporan',
-          style: TextStyle(fontSize: 20, color: titleColor),
+          style: TextStyle(fontSize: 20, color: Color(0xFF093275)),
         ),
         backgroundColor: appBarBackground,
       ),
@@ -278,17 +393,18 @@ class _VocareLaporanState extends State<VocareLaporan> {
         minimum: const EdgeInsets.fromLTRB(20, 8, 20, 18),
         child: Row(
           children: [
-            // Save Button
+            // Tombol Simpan
             Expanded(
               child: SizedBox(
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: (_isLoading || _isUpdatingLaporan) ? null : _updateLaporan,
+                  onPressed: isBusy ? null : _updateLaporan,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: headingBlue,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   child: _isUpdatingLaporan
                       ? const SizedBox(
@@ -310,16 +426,14 @@ class _VocareLaporanState extends State<VocareLaporan> {
               ),
             ),
             const SizedBox(width: 12),
+            // Tombol CPPT
             Expanded(
               child: SizedBox(
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: (_isLoading || _isUpdatingLaporan)
+                  onPressed: isBusy
                       ? null
-                      : () {
-                          Navigator.of(context)
-                              .popUntil((route) => route.isFirst);
-                        },
+                      : _processCppt, // Menggunakan fungsi POST baru
                   style: ElevatedButton.styleFrom(
                     backgroundColor: titleColor,
                     foregroundColor: Colors.white,
@@ -327,10 +441,22 @@ class _VocareLaporanState extends State<VocareLaporan> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Selesai',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                  ),
+                  child: _isPostingCppt
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 3,
+                          ),
+                        )
+                      : const Text(
+                          'CPPT',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
+                        ),
                 ),
               ),
             ),

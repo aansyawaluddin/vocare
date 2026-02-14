@@ -1,9 +1,5 @@
 import 'package:flutter/material.dart';
 
-// ----------------------------------------------------------------------
-// UI: STYLING & WIDGET UTAMA
-// ----------------------------------------------------------------------
-
 class _AppColors {
   const _AppColors();
 
@@ -30,18 +26,21 @@ class _AppDimensions {
 
 const _AppColors _colors = _AppColors();
 
-/// Menangani logika tampilan untuk nilai null/kosong
 String _formatDisplayValue(String? value, {String? defaultIfNull}) {
-  final String defaultText = defaultIfNull ?? 'Tidak ada'; // Aturan umum: "Tidak ada"
-  
+  final String defaultText = defaultIfNull ?? 'Tidak ada';
+
   if (value == null || value == 'null' || value.trim().isEmpty) {
     return defaultText;
   }
   return value;
 }
 
-/// Widget baris info dasar dengan teks default yang bisa di-override
-Widget buildInfoRow(String label, String? value, {bool bold = false, String? defaultIfNull}) {
+Widget buildInfoRow(
+  String label,
+  String? value, {
+  bool bold = false,
+  String? defaultIfNull,
+}) {
   return Padding(
     padding: const EdgeInsets.symmetric(vertical: 4.0),
     child: Row(
@@ -58,15 +57,12 @@ Widget buildInfoRow(String label, String? value, {bool bold = false, String? def
         ),
         const Text(': '),
         Expanded(
-          child: Text(
-            _formatDisplayValue(value, defaultIfNull: defaultIfNull), // Diperbarui
-          ),
+          child: Text(_formatDisplayValue(value, defaultIfNull: defaultIfNull)),
         ),
       ],
     ),
   );
 }
-
 
 Widget buildInfoCard({required Widget child}) {
   return Container(
@@ -112,10 +108,6 @@ Widget buildSectionCard(String title, List<Widget> rows) {
   );
 }
 
-// ----------------------------------------------------------------------
-// UI: SECTION BUILDERS (DIPAKAI DI SCREEN)
-// ----------------------------------------------------------------------
-
 Widget buildInformasiUmumSection(Map<String, dynamic> extractedFields) {
   return buildSectionCard('1. Informasi Pasien & Kunjungan', [
     buildInfoRow('No. Rekam Medis (RM)', extractedFields['no_rm']?.toString()),
@@ -128,35 +120,28 @@ Widget buildInformasiUmumSection(Map<String, dynamic> extractedFields) {
       extractedFields['status_perkawinan']?.toString(),
     ),
     buildInfoRow('Alamat', extractedFields['alamat']?.toString()),
-    Text(
+
+    const SizedBox(height: 8),
+    const Text(
       'Penanggung Jawab Pasien:',
-      style: TextStyle(fontWeight: FontWeight.w600),
+      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
     ),
-    buildInfoRow('Nama ', extractedFields['penanggung_jawab']?.toString()),
-    buildInfoRow(
-      'Hubungan ',
-      extractedFields['hubungan_penanggung_jawab']?.toString(),
-    ),
-    buildInfoRow(
-      'Kontak ',
-      extractedFields['kontak_penanggung_jawab']?.toString(),
-    ),
+    buildInfoRow('Nama', extractedFields['pj_nama']?.toString()),
+    buildInfoRow('Hubungan', extractedFields['pj_hubungan']?.toString()),
+    buildInfoRow('Kontak', extractedFields['pj_telepon']?.toString()),
+
     const Divider(),
-    Text('Informasi Kunjungan:', style: TextStyle(fontWeight: FontWeight.w600)),
+    const Text(
+      'Informasi Kunjungan:',
+      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+    ),
     buildInfoRow(
       'Tanggal Kunjungan',
       extractedFields['tanggal_masuk']?.toString(),
     ),
     buildInfoRow('Jam Kunjungan', extractedFields['waktu_masuk']?.toString()),
     buildInfoRow('Poli Tujuan', extractedFields['poli']?.toString()),
-    // buildInfoRow('Kelas Pelayanan', extractedFields['pelayanan']?.toString()), // Dihapus (tidak ada di JSON)
     buildInfoRow('Cara Masuk', extractedFields['cara_masuk']?.toString()),
-    // buildInfoRow('Pendamping', extractedFields['pendamping']?.toString()),
-    // buildInfoRow(
-    //  'Sumber Data Anamnesa',
-    //  extractedFields['sumber_data']?.toString(),
-    // ),
-    // buildInfoRow('Rujukan', extractedFields['rujukan']?.toString()), // Dihapus (tidak ada di JSON)
   ]);
 }
 
@@ -214,57 +199,56 @@ Widget buildStatusGeneralSection(Map<String, dynamic> extractedFields) {
 }
 
 Widget buildPemeriksaanFisikSection(Map<String, dynamic> extractedFields) {
-  const String defaultText = 'Normal'; // Aturan khusus untuk bagian ini
+  const String defaultText = 'Normal';
 
   return buildSectionCard('5. Pemeriksaan Fisik (Per Sistem)', [
     buildInfoRow(
       'Kepala, Mata, THT',
       extractedFields['kepala']?.toString(),
-      defaultIfNull: defaultText, // Diterapkan
-    ), // Label digabung
+      defaultIfNull: defaultText, 
+    ),
     buildInfoRow(
-      'Mulut', 
+      'Mulut',
       extractedFields['mulut']?.toString(),
-      defaultIfNull: defaultText, // Diterapkan
+      defaultIfNull: defaultText, 
     ),
     buildInfoRow(
-      'Leher', 
+      'Leher',
       extractedFields['leher']?.toString(),
-      defaultIfNull: defaultText, // Diterapkan
+      defaultIfNull: defaultText, 
     ),
     buildInfoRow(
-      'Thorak & Payudara', 
+      'Thorak & Payudara',
       extractedFields['thoraks']?.toString(),
-      defaultIfNull: defaultText, // Diterapkan
+      defaultIfNull: defaultText, 
     ),
     buildInfoRow(
-      'Jantung', 
+      'Jantung',
       extractedFields['jantung']?.toString(),
-      defaultIfNull: defaultText, // Diterapkan
+      defaultIfNull: defaultText, 
     ),
     buildInfoRow(
-      'Abdomen', 
+      'Abdomen',
       extractedFields['abdomen']?.toString(),
-      defaultIfNull: defaultText, // Diterapkan
+      defaultIfNull: defaultText, 
     ),
     buildInfoRow(
-      'Urogenital', 
+      'Urogenital',
       extractedFields['urogenital']?.toString(),
-      defaultIfNull: defaultText, // Diterapkan
+      defaultIfNull: defaultText, 
     ),
     buildInfoRow(
-      'Ekstremitas', 
+      'Ekstremitas',
       extractedFields['ekstremitas']?.toString(),
-      defaultIfNull: defaultText, // Diterapkan
+      defaultIfNull: defaultText, 
     ),
     buildInfoRow(
       'Kulit (Integumen)',
       extractedFields['kulit']?.toString(),
-      defaultIfNull: defaultText, // Diterapkan
+      defaultIfNull: defaultText, 
     ), // Label diubah
   ]);
 }
-
 
 Widget buildAsesmenNyeriSection(Map<String, dynamic> extractedFields) {
   return buildSectionCard('6. Asesmen Nyeri', [
@@ -334,7 +318,7 @@ Widget buildStatusPsikososialSection(Map<String, dynamic> extractedFields) {
     ),
     buildInfoRow(
       'Status Komunikasi',
-      extractedFields['komunikasi']?.toString(), // Akan tampil 'Tidak ada'
+      extractedFields['komunikasi']?.toString(),
     ),
     buildInfoRow(
       'Status Emosional',
@@ -362,8 +346,8 @@ Widget buildStatusPsikososialSection(Map<String, dynamic> extractedFields) {
 Widget buildMasalahKeperawatanSection(Map<String, dynamic> extractedFields) {
   final List<dynamic> masalahList =
       extractedFields['masalah_keperawatan_list'] is List
-          ? extractedFields['masalah_keperawatan_list'] as List<dynamic>
-          : [];
+      ? extractedFields['masalah_keperawatan_list'] as List<dynamic>
+      : [];
 
   final String masalahDisplay;
   if (masalahList.isEmpty) {
@@ -378,13 +362,13 @@ Widget buildMasalahKeperawatanSection(Map<String, dynamic> extractedFields) {
 }
 
 Widget buildRencanaAsuhanSection(Map<String, dynamic> extractedFields) {
- return buildSectionCard('12. Rencana Asuhan Keperawatan', [
-   buildInfoRow(
-     'Rencana Asuhan',
-     extractedFields['rencana_asuhan_string']?.toString(),
-     bold: true,
-   ),
- ]);
+  return buildSectionCard('12. Rencana Asuhan Keperawatan', [
+    buildInfoRow(
+      'Rencana Asuhan',
+      extractedFields['rencana_asuhan_string']?.toString(),
+      bold: true,
+    ),
+  ]);
 }
 
 

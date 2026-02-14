@@ -20,14 +20,13 @@ class _LaporanTambahanState extends State<LaporanTambahan> {
   static const headingBlue = Color(0xFF0F4C81);
   static const titleColor = Color(0xFF093275);
   static const appBarBackground = Color(0xFFD7E2FD);
-  static const buttonUpdate = Color(0xFF007BFF); // ADDED
+  static const buttonUpdate = Color(0xFF007BFF); 
 
   Map<String, dynamic>? _laporanData;
   bool _isLoading = true;
-  bool _isUpdating = false; // ADDED: State for update process
+  bool _isUpdating = false; 
   String? _error;
 
-  // ADDED: Controllers for editable fields
   late final TextEditingController _sdkiController;
   late final TextEditingController _slkiController;
   late final TextEditingController _sikiController;
@@ -36,7 +35,6 @@ class _LaporanTambahanState extends State<LaporanTambahan> {
   @override
   void initState() {
     super.initState();
-    // ADDED: Initialize controllers
     _sdkiController = TextEditingController();
     _slkiController = TextEditingController();
     _sikiController = TextEditingController();
@@ -44,7 +42,6 @@ class _LaporanTambahanState extends State<LaporanTambahan> {
     _fetchLaporan();
   }
 
-  // ADDED: Dispose controllers to prevent memory leaks
   @override
   void dispose() {
     _sdkiController.dispose();
@@ -61,7 +58,6 @@ class _LaporanTambahanState extends State<LaporanTambahan> {
   }
 
   Map<String, String> _buildHeaders({bool isJsonContent = false}) {
-    // MODIFIED: Added isJsonContent parameter
     final headers = {'Accept': 'application/json'};
     if (isJsonContent) {
       headers['Content-Type'] = 'application/json';
@@ -92,7 +88,6 @@ class _LaporanTambahanState extends State<LaporanTambahan> {
 
         setState(() {
           _laporanData = data;
-          // ADDED: Populate controllers with data from API
           _sdkiController.text = _formatContentToList(data['SDKI']?.toString());
           _slkiController.text = _formatContentToList(data['SLKI']?.toString());
           _sikiController.text = _formatContentToList(data['SIKI']?.toString());
@@ -116,7 +111,6 @@ class _LaporanTambahanState extends State<LaporanTambahan> {
     }
   }
 
-  // ADDED: Function to update the report via PUT request
   Future<void> _updateLaporan() async {
     setState(() => _isUpdating = true);
 
@@ -160,7 +154,6 @@ class _LaporanTambahanState extends State<LaporanTambahan> {
     }
   }
 
-  /// Converts API string e.g., `{"Item 1","Item 2"}` to a numbered list.
   String _formatContentToList(String? content) {
     if (content == null || content.isEmpty || content == '{}') {
       return 'Tidak ada data';
@@ -177,24 +170,19 @@ class _LaporanTambahanState extends State<LaporanTambahan> {
     return formattedItems.join('\n');
   }
 
-  /// ADDED: Converts a numbered list string back to the API format.
   String _formatTextToApi(String text) {
     if (text.trim().isEmpty || text.trim() == 'Tidak ada data') {
       return '{}';
     }
-    // Split by new line, remove numbering, trim, and filter out empty lines
     final items = text
         .split('\n')
         .map((line) => line.replaceAll(RegExp(r'^\d+\.\s*'), '').trim())
         .where((item) => item.isNotEmpty)
         .toList();
-    // Enclose each item in quotes and join with a comma
     final quotedItems = items.map((item) => '"$item"').join(',');
-    // Return in the {"item1","item2"} format
     return '{$quotedItems}';
   }
 
-  // MODIFIED: This widget now takes a controller for editable content.
   Widget _buildSection(String title, TextEditingController controller) {
     return Container(
       width: double.infinity,
@@ -258,7 +246,6 @@ class _LaporanTambahanState extends State<LaporanTambahan> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        // MODIFIED: Using controllers instead of raw data strings.
         _buildSection(
           'SDKI (Standar Diagnosis Keperawatan Indonesia)',
           _sdkiController,
@@ -276,7 +263,6 @@ class _LaporanTambahanState extends State<LaporanTambahan> {
     );
   }
   
-  // ADDED: Helper for creating loading buttons
   Widget _buildLoadingButton(
       {required bool isLoading,
       required VoidCallback? onPressed,

@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
-import 'package:vocare/page/perawat/inap/laporan.dart';
 
 class IntervensiInap extends StatefulWidget {
   final String token;
@@ -32,7 +31,6 @@ class IntervensiInap extends StatefulWidget {
 }
 
 class _IntervensiInapState extends State<IntervensiInap> {
-  // --- MODIFIED: Added controllers for the form fields ---
   late final TextEditingController _implementasiController;
   late final TextEditingController _evaluasiController;
   final _formKey = GlobalKey<FormState>();
@@ -62,13 +60,11 @@ class _IntervensiInapState extends State<IntervensiInap> {
 
   @override
   void dispose() {
-    // Dispose controllers to free up resources
     _implementasiController.dispose();
     _evaluasiController.dispose();
     super.dispose();
   }
 
-  // --- NEW: FUNCTION TO SUBMIT THE INTERVENTION FORM ---
   Future<void> _submitIntervensi() async {
     // Validate the form
     if (!_formKey.currentState!.validate()) {
@@ -88,10 +84,10 @@ class _IntervensiInapState extends State<IntervensiInap> {
         'Authorization': 'Bearer ${widget.token}',
       };
 
-      // --- MODIFIED: Body now uses controller text ---
       final body = jsonEncode({
         'patient_id': widget.patientId,
         'user_id': widget.perawatId,
+        'cppt_id': widget.cpptId,
         'implementasi': _implementasiController.text,
         'evaluasi': _evaluasiController.text,
       });
@@ -106,15 +102,6 @@ class _IntervensiInapState extends State<IntervensiInap> {
       final response = await http.post(url, headers: headers, body: body);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final decodedBody = jsonDecode(response.body);
-        final dynamic newIntervensiId = (decodedBody is Map)
-            ? (decodedBody['data']?['id'] ?? decodedBody['id'])
-            : null;
-
-        if (newIntervensiId == null) {
-          throw Exception('Gagal mendapatkan ID Intervensi dari server.');
-        }
-
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -122,8 +109,10 @@ class _IntervensiInapState extends State<IntervensiInap> {
               backgroundColor: Colors.green,
             ),
           );
-          // After submitting intervention, proceed to post the report
-          await _postLaporan(newIntervensiId);
+
+
+          int count = 0;
+          Navigator.of(context).popUntil((_) => count++ >= 4);
         }
       } else {
         throw Exception(
@@ -146,61 +135,68 @@ class _IntervensiInapState extends State<IntervensiInap> {
     }
   }
 
-  // --- MODIFIED: This function now accepts the intervensiId ---
-  Future<void> _postLaporan(dynamic intervensiId) async {
-    final base = dotenv.env['API_URL'] ?? dotenv.env['API_BASE_URL'] ?? '';
-    final url = Uri.parse('$base/laporan/');
-    final headers = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': 'Bearer ${widget.token}',
-    };
-    final body = jsonEncode({
-      "cppt_id": widget.cpptId,
-      "patient_id": widget.patientId,
-      "perawat_id": widget.perawatId,
-      "intevensi_id": intervensiId,
-      "query": widget.query,
-    });
+  // _postLaporan SUDAH DIHAPUS
 
-    try {
-      debugPrint('POST ${url.toString()} -> $body');
-      final response = await http.post(url, headers: headers, body: body);
-
-      if (!mounted) return;
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final responseBody = jsonDecode(response.body);
-        final int? laporanId = int.tryParse(
-          (responseBody['data']?['id'] ?? responseBody['id'])?.toString() ?? '',
-        );
-
-        if (laporanId == null) {
-          throw Exception('Gagal mendapatkan ID Laporan dari respons server.');
-        }
-
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                LaporanTambahan(laporanId: laporanId, token: widget.token),
+  Widget _buildForm() {
+    return Form(
+      key: _formKey,
+      child: ListView(
+        padding: const EdgeInsets.all(16.0),
+        children: [
+          const Text(
+            'Implementasi',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: headingBlue,
+            ),
           ),
-        );
-      } else {
-        throw Exception(
-          'Gagal membuat laporan (Status ${response.statusCode}): ${response.body}',
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: Colors.red,
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _implementasiController,
+            maxLines: 8, // Sedikit diperbesar
+            decoration: const InputDecoration(
+              hintText: 'Masukkan detail implementasi...',
+              border: OutlineInputBorder(),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Implementasi tidak boleh kosong';
+              }
+              return null;
+            },
           ),
-        );
-      }
-    }
+          const SizedBox(height: 24),
+          const Text(
+            'Evaluasi',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: headingBlue,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _evaluasiController,
+            maxLines: 5,
+            decoration: const InputDecoration(
+              hintText: 'Masukkan detail evaluasi...',
+              border: OutlineInputBorder(),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Evaluasi tidak boleh kosong';
+              }
+              return null;
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -212,65 +208,19 @@ class _IntervensiInapState extends State<IntervensiInap> {
         backgroundColor: const Color(0xFFD7E2FD),
       ),
       backgroundColor: const Color(0xFFD7E2FD),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        // --- MODIFIED: Body is now a form ---
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              const Text(
-                'Implementasi',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: headingBlue,
-                ),
+      body: Stack(
+        children: [
+          _buildForm(),
+
+          if (_isSubmitting)
+            Container(
+              color: Colors.black.withOpacity(0.5),
+              child: const Center(
+                child: CircularProgressIndicator(color: Colors.white),
               ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _implementasiController,
-                maxLines: 5,
-                decoration: const InputDecoration(
-                  hintText: 'Masukkan detail implementasi...',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Implementasi tidak boleh kosong';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Evaluasi',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: headingBlue,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _evaluasiController,
-                maxLines: 5,
-                decoration: const InputDecoration(
-                  hintText: 'Masukkan detail evaluasi...',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Evaluasi tidak boleh kosong';
-                  }
-                  return null;
-                },
-              ),
-            ],
-          ),
-        ),
+            ),
+        ],
       ),
-      // --- MODIFIED: Bottom button now submits the form ---
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(16, 8, 16, 18),
         child: ElevatedButton(
@@ -282,20 +232,12 @@ class _IntervensiInapState extends State<IntervensiInap> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
+            elevation: 0,
           ),
-          child: _isSubmitting
-              ? const SizedBox(
-                  height: 24,
-                  width: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3,
-                    color: Colors.white,
-                  ),
-                )
-              : const Text(
-                  'Simpan Intervensi & Buat Laporan',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
+          child: const Text(
+            'Simpan Intervensi',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
         ),
       ),
     );

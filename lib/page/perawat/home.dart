@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:vocare/common/type.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:vocare/page/login/login.dart';
 import 'package:vocare/page/perawat/laporan.dart';
 import 'package:vocare/page/perawat/laporan/upload_lab.dart';
@@ -107,15 +108,16 @@ class _HomePerawatPageState extends State<HomePerawatPage> {
                                         color: Color(0xFF093275),
                                       ),
                                     ),
-                                    onTap: () {
-                                      Future.delayed(
-                                        Duration.zero,
-                                        () => Navigator.pushReplacement(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) => const Login(),
-                                          ),
+                                    onTap: () async {
+                                      const storage = FlutterSecureStorage();
+                                      await storage.delete(key: 'access_token');
+                                      await storage.delete(key: 'user');
+                                      if (!mounted) return;
+                                      Navigator.of(context).pushAndRemoveUntil(
+                                        MaterialPageRoute(
+                                          builder: (context) => const Login(),
                                         ),
+                                        (Route<dynamic> route) => false,
                                       );
                                     },
                                   ),

@@ -14,8 +14,8 @@ enum VoiceState { initial, listening, processing }
 
 enum DataState { loading, loaded, error }
 
-const String _kCacheKey = 'vocare_questions_cache_v1';
-const String _kCacheTsKey = 'vocare_questions_cache_ts_v1';
+const String _kCacheKey = 'vocare_questions_cache_v2';
+const String _kCacheTsKey = 'vocare_questions_cache_ts_v2';
 const Duration _kCacheTTL = Duration(hours: 24);
 
 class VoicePageLaporan extends StatefulWidget {
@@ -55,7 +55,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
 
   String _activeQuestionSet = 'pasien';
 
-  final List<String> _initialQuestions = const [
+  List<String> _initialQuestions = const [
     "Berapa nomor rekam medis pasien?",
     "Siapa nama lengkap pasien?",
     "Apa jenis kelamin pasien?",
@@ -183,6 +183,10 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
       }
       final response = await http.get(
         Uri.parse('$apiUrl/assesments/questions'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${widget.user.token}',
+        },
       );
       if (response.statusCode == 200) {
         final decodedData = json.decode(response.body);
@@ -190,15 +194,34 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
 
         await _saveCachedQuestions(data);
 
-        final List<String> pQuestions = List<String>.from(
-          (data['pasien']?[0]?['list_pertanyaan']) ?? [],
-        );
-        final List<String> nQuestions = List<String>.from(
-          (data['perawat']?[0]?['list_pertanyaan']) ?? [],
+        List<String> _safeParseList(dynamic listData) {
+          if (listData is List) {
+            return listData.map((item) {
+              // Jika item sudah String, ambil langsung
+              if (item is String) return item;
+              // Jika item berupa Map (penyebab error Anda), ambil value tertentu atau toString
+              if (item is Map) return item.values.first.toString();
+              // Fallback
+              return item.toString();
+            }).toList();
+          }
+          return [];
+        }
+
+        final List<String> genQuestions = _safeParseList(
+          data['general_fields'],
         );
 
+        // Ganti parsing pasien
+        final List<String> pQuestions = _safeParseList(data['pasien']);
+
+        // Ganti parsing perawat
+        final List<String> nQuestions = _safeParseList(data['perawat']);
         if (!mounted) return;
         safeSetState(() {
+          if (genQuestions.isNotEmpty) {
+            _initialQuestions = genQuestions;
+          }
           _pasienQuestions = pQuestions;
           _perawatQuestions = nQuestions;
           _dataState = DataState.loaded;
@@ -235,26 +258,28 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
       );
 
       if (cached != null) {
+        final List<String> genQuestions = List<String>.from(
+          cached['general_fields'] ?? [],
+        );
         final List<String> pQuestions = List<String>.from(
-          (cached['pasien']?[0]?['list_pertanyaan']) ?? [],
+          cached['pasien'] ?? [],
         );
         final List<String> nQuestions = List<String>.from(
-          (cached['perawat']?[0]?['list_pertanyaan']) ?? [],
+          cached['perawat'] ?? [],
         );
 
         safeSetState(() {
+          if (genQuestions.isNotEmpty) {
+            _initialQuestions = genQuestions;
+          }
           _pasienQuestions = pQuestions;
           _perawatQuestions = nQuestions;
           _dataState = DataState.loaded;
         });
-
-        if (cacheAge < _kCacheTTL) {
+        if (cacheAge >= _kCacheTTL) {
           _refreshQuestionsFromNetwork();
-          return;
-        } else {
-          _refreshQuestionsFromNetwork();
-          return;
         }
+        return;
       }
 
       final apiUrl = dotenv.env['API_URL'];
@@ -262,22 +287,30 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
 
       final response = await http.get(
         Uri.parse('$apiUrl/assesments/questions'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${widget.user.token}',
+        },
       );
 
       if (response.statusCode == 200) {
         final decodedData = json.decode(response.body);
         final data = decodedData['data'] as Map<String, dynamic>? ?? {};
 
-        final List<String> pQuestions = List<String>.from(
-          (data['pasien']?[0]?['list_pertanyaan']) ?? [],
+        final List<String> genQuestions = List<String>.from(
+          data['general_fields'] ?? [],
         );
+        final List<String> pQuestions = List<String>.from(data['pasien'] ?? []);
         final List<String> nQuestions = List<String>.from(
-          (data['perawat']?[0]?['list_pertanyaan']) ?? [],
+          data['perawat'] ?? [],
         );
 
         await _saveCachedQuestions(data);
 
         safeSetState(() {
+          if (genQuestions.isNotEmpty) {
+            _initialQuestions = genQuestions;
+          }
           _pasienQuestions = pQuestions;
           _perawatQuestions = nQuestions;
           _dataState = DataState.loaded;
@@ -290,12 +323,34 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
     } catch (e) {
       debugPrint('Error fetching questions: $e');
       if (!mounted) return;
+
       final cached = await _loadCachedQuestions();
       if (cached != null) {
-        safeSetState(() {
-          _errorMessage = e.toString();
-          _dataState = DataState.loaded;
-        });
+        // Coba parse cache lagi sebagai fallback
+        try {
+          final List<String> genQuestions = List<String>.from(
+            cached['general_fields'] ?? [],
+          );
+          final List<String> pQuestions = List<String>.from(
+            cached['pasien'] ?? [],
+          );
+          final List<String> nQuestions = List<String>.from(
+            cached['perawat'] ?? [],
+          );
+
+          safeSetState(() {
+            if (genQuestions.isNotEmpty) _initialQuestions = genQuestions;
+            _pasienQuestions = pQuestions;
+            _perawatQuestions = nQuestions;
+            _dataState = DataState.loaded;
+            _errorMessage = e.toString();
+          });
+        } catch (_) {
+          safeSetState(() {
+            _errorMessage = e.toString();
+            _dataState = DataState.error;
+          });
+        }
       } else {
         safeSetState(() {
           _errorMessage = e.toString();
@@ -876,7 +931,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
                   });
                 } else {
                   safeSetState(() {
-                    _currentSessionIndex++; 
+                    _currentSessionIndex++;
 
                     _state = VoiceState.initial;
                     _statusText = 'ready';
@@ -905,6 +960,7 @@ class _VoicePageLaporanState extends State<VoicePageLaporan>
             reportText: reportText,
             username: widget.user.username,
             token: widget.user.token,
+            user: widget.user,
           ),
         ),
       );

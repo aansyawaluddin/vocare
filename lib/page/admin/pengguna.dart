@@ -45,7 +45,10 @@ class _PenggunaState extends State<Pengguna> {
     );
 
     if (resp.statusCode >= 200 && resp.statusCode < 300) {
-      final List<dynamic> data = json.decode(resp.body);
+      final Map<String, dynamic> responseBody = json.decode(resp.body);
+
+      final List<dynamic> data = responseBody['data'];
+
       return data.map((j) => User.fromJson(j as Map<String, dynamic>)).toList();
     } else {
       throw Exception('Gagal mengambil pengguna');
@@ -83,7 +86,10 @@ class _PenggunaState extends State<Pengguna> {
       await _refresh();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Perubahan tersimpan.'), behavior: SnackBarBehavior.floating),
+          SnackBar(
+            content: Text('Perubahan tersimpan.'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     }
@@ -99,14 +105,24 @@ class _PenggunaState extends State<Pengguna> {
         } else if (snap.hasError) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: Text('Error: ${snap.error}', style: TextStyle(color: widget.navy))),
+            child: Center(
+              child: Text(
+                'Error: ${snap.error}',
+                style: TextStyle(color: widget.navy),
+              ),
+            ),
           );
         } else {
           final pengguna = snap.data ?? [];
           if (pengguna.isEmpty) {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: Text('Belum ada pengguna', style: TextStyle(color: widget.navy.withOpacity(0.9)))),
+              child: Center(
+                child: Text(
+                  'Belum ada pengguna',
+                  style: TextStyle(color: widget.navy.withOpacity(0.9)),
+                ),
+              ),
             );
           }
 
@@ -167,7 +183,10 @@ class ReportCard extends StatelessWidget {
         Container(
           width: isCompact ? 48 : 58,
           height: isCompact ? 80 : 65,
-          decoration: BoxDecoration(color: navy, borderRadius: BorderRadius.circular(10)),
+          decoration: BoxDecoration(
+            color: navy,
+            borderRadius: BorderRadius.circular(10),
+          ),
           child: Center(
             child: Image.asset(
               'assets/pengguna.png',
@@ -175,7 +194,11 @@ class ReportCard extends StatelessWidget {
               height: isCompact ? 24 : 28,
               fit: BoxFit.contain,
               errorBuilder: (context, error, stackTrace) {
-                return Icon(Icons.person, color: Colors.white, size: isCompact ? 20 : 24);
+                return Icon(
+                  Icons.person,
+                  color: Colors.white,
+                  size: isCompact ? 20 : 24,
+                );
               },
             ),
           ),
@@ -190,9 +213,18 @@ class ReportCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Nama: $perawat', style: TextStyle(color: navy, fontWeight: FontWeight.w700)),
+                  Text(
+                    'Nama: $perawat',
+                    style: TextStyle(color: navy, fontWeight: FontWeight.w700),
+                  ),
                   const SizedBox(height: 6),
-                  Text('Role: $role', style: TextStyle(color: navy.withOpacity(0.8), fontSize: 12)),
+                  Text(
+                    'Role: $role',
+                    style: TextStyle(
+                      color: navy.withOpacity(0.8),
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
               ),
             ),

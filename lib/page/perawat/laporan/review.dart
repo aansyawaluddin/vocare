@@ -4,17 +4,20 @@ import 'package:flutter/material.dart';
 import 'package:vocare/page/perawat/laporan/assesments.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:vocare/common/type.dart';
 
 class VocareReport extends StatefulWidget {
   final String reportText;
   final String username;
   final String token;
+  final User user;
 
   const VocareReport({
     super.key,
     required this.reportText,
     required this.username,
     required this.token,
+    required this.user,
   });
 
   @override
@@ -112,6 +115,7 @@ class _VocareReportState extends State<VocareReport> {
             apiResponse: result,
             username: widget.username,
             token: widget.token,
+            user: widget.user,
           ),
         ),
       );

@@ -7,7 +7,9 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AssessmentsPieChart extends StatefulWidget {
   final double? width;
-  const AssessmentsPieChart({Key? key, this.width}) : super(key: key);
+  final String token;
+  const AssessmentsPieChart({Key? key, this.width, required this.token})
+    : super(key: key);
 
   @override
   State<AssessmentsPieChart> createState() => _AssessmentsPieChartState();
@@ -55,18 +57,30 @@ class _AssessmentsPieChartState extends State<AssessmentsPieChart> {
         throw Exception('Tidak menemukan API_URL di .env');
       }
 
-      // Gunakan endpoint /assesments/ sesuai catatan Anda
       final url = baseApi.endsWith('/')
           ? '${baseApi}assesments/'
           : '$baseApi/assesments/';
 
+      // 3. Tambahkan Headers dengan Authorization Token
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization':
+            'Bearer ${widget.token}', // <--- PENTING: Token disisipkan di sini
+      };
+
       final resp = await http
-          .get(Uri.parse(url))
+          .get(
+            Uri.parse(url),
+            headers: headers, // <--- Gunakan headers
+          )
           .timeout(const Duration(seconds: 15));
 
       if (resp.statusCode != 200) {
-        // Keluarkan body untuk membantu debugging ketika bukan 200
         final body = resp.body;
+        if (resp.statusCode == 401) {
+          throw Exception('Sesi berakhir (Unauthorized). Silakan login ulang.');
+        }
         throw Exception(
           'HTTP ${resp.statusCode}: ${resp.reasonPhrase ?? 'Unknown'}. Body: $body',
         );
@@ -609,8 +623,7 @@ class _PieChartPainter extends CustomPainter {
           outsideLabelRadius += radius * 0.08;
           outAttempts++;
         }
-        if (!placed) {
-        }
+        if (!placed) {}
       }
 
       start += sweep;

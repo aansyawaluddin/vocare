@@ -222,11 +222,7 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
     }
   }
 
-  // -----------------------
-  // Helper: ekstrak implementasi & evaluasi dari teks transkrip
-  // -----------------------
   Map<String, String> _extractImplementasiEvaluasi(String text) {
-    // regex: ambil teks setelah "implementasi" sampai sebelum "evaluasi" (jika ada) dan sebaliknya
     final implPattern = RegExp(
       r'implementasi\s*[:\-]?\s*(.+?)(?=(?:evaluasi\s*[:\-]?)|$)',
       caseSensitive: false,
@@ -250,12 +246,10 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
     return {'implementasi': implementasi, 'evaluasi': evaluasi};
   }
 
-  // --- MODIFIED: FUNCTION TO NAVIGATE TO INTERVENSI PAGE (pass initial values) ---
   Future<void> _navigateToIntervensi() async {
     setState(() => _isLoading = true);
     final token = widget.user.token ?? '';
     try {
-      // 1. Get the latest CPPT ID first
       final int? latestCpptId = await _getLatestCpptId(token);
       if (latestCpptId == null) {
         throw Exception(
@@ -265,12 +259,10 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
 
       if (!mounted) return;
 
-      // 2. Extract implementasi/evaluasi dari _currentText
       final extracted = _extractImplementasiEvaluasi(_currentText);
       final initialImplementasi = extracted['implementasi'] ?? '';
       final initialEvaluasi = extracted['evaluasi'] ?? '';
 
-      // 3. Navigate to IntervensiInap page with all necessary data
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -417,139 +409,140 @@ class _ReviewTambahanState extends State<ReviewTambahan> {
         ),
         backgroundColor: const Color(0xFFD7E2FD),
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Column(
-            children: [
-              const SizedBox(height: 10),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Container(
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: cardBorder),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
+      // Gunakan Stack untuk menumpuk UI Utama dan Loading Overlay
+      body: Stack(
+        children: [
+          // --- LAYER 1: UI UTAMA ---
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              child: Column(
+                children: [
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: cardBorder),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.03),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
-                      ],
+                        padding: const EdgeInsets.all(18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Hasil Transkrip Voice:',
+                              style: TextStyle(
+                                color: headingBlue,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _currentText,
+                              style: const TextStyle(height: 1.4, fontSize: 16),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                        ),
+                      ),
                     ),
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 56,
+                    child: Row(
                       children: [
-                        const Text(
-                          'Hasil Transkrip Voice:',
-                          style: TextStyle(
-                            color: headingBlue,
-                            fontWeight: FontWeight.w700,
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _isLoading ? null : _showEditSheet,
+                            icon: const Icon(Icons.edit, color: Colors.white),
+                            label: const Text('Edit'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: lightButtonBlue,
+                              foregroundColor: Colors.white,
+                              textStyle: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          _currentText,
-                          style: const TextStyle(height: 1.4, fontSize: 16),
+                        const SizedBox(width: 5),
+
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : _submitCppt,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: darkButtonBlue,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text(
+                              'CPPT',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(width: 5),
+
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: _isLoading
+                                ? null
+                                : _navigateToIntervensi,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: successButtonGreen,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text(
+                              'Intervensi',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                ),
+                  const SizedBox(height: 22),
+                ],
               ),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 56,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _isLoading ? null : _showEditSheet,
-                        icon: const Icon(Icons.edit, color: Colors.white),
-                        label: const Text('Edit'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: lightButtonBlue,
-                          foregroundColor: Colors.white,
-                          textStyle: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _submitCppt,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: darkButtonBlue,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.0,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text(
-                                'CPPT',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    Expanded(
-                      child: ElevatedButton(
-                        // --- MODIFIED: Call the new navigation function ---
-                        onPressed: _isLoading ? null : _navigateToIntervensi,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: successButtonGreen,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.0,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text(
-                                'Intervensi',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 22),
-            ],
+            ),
           ),
-        ),
+
+          if (_isLoading)
+            Container(
+              color: Colors.black.withOpacity(
+                0.5,
+              ), 
+              child: const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
+            ),
+        ],
       ),
     );
   }

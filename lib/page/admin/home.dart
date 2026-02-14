@@ -29,7 +29,6 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
 
     switch (_selectedTab) {
       case 0:
-        // Menambahkan padding di bawah agar konten tidak tertutup oleh navigasi
         return SingleChildScrollView(
           padding: const EdgeInsets.only(bottom: 120.0),
           child: Column(
@@ -55,9 +54,6 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
         );
 
       case 1:
-        // PENTING: Anda juga perlu menambahkan padding di bagian bawah daftar
-        // di dalam widget `Pengguna` Anda, sama seperti yang dilakukan untuk tab 0.
-        // Contoh: Jika `Pengguna` menggunakan ListView, tambahkan `padding: const EdgeInsets.only(bottom: 120)`.
         return Pengguna(
           key: _penggunaWidgetKey,
           navy: navy,
@@ -66,7 +62,7 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
         );
 
       case 2:
-        return const AssessmentsPieChart();
+        return AssessmentsPieChart(token: widget.user.token);
 
       case 3:
         return PasienInapAdmin(user: widget.user);
@@ -88,10 +84,11 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
     return Scaffold(
       backgroundColor: lightBackground,
       body: SafeArea(
-        bottom: false, 
+        bottom: false,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
+            final isCompact = width < 380;
 
             // HEADER
             final header = Container(
@@ -109,17 +106,13 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                   Row(
                     children: [
                       Container(
-                        width: 44,
-                        height: 20,
-                        decoration: BoxDecoration(
-    
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Center(
-                          child: Icon(
-                            Icons.health_and_safety,
-                            color: Colors.white,
-                            size: 26,
+                        width: isCompact ? 54 : 64,
+                        height: isCompact ? 54 : 64,
+                        child: Center(
+                          child: Image.asset(
+                            'assets/icon.png',
+                            width: isCompact ? 54 : 64,
+                            height: isCompact ? 54 : 64,
                           ),
                         ),
                       ),
@@ -182,7 +175,8 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                                       Navigator.pushAndRemoveUntil(
                                         context,
                                         MaterialPageRoute(
-                                            builder: (_) => const Login()),
+                                          builder: (_) => const Login(),
+                                        ),
                                         (route) => false,
                                       );
                                     }
@@ -232,9 +226,10 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withOpacity(0.12),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4)),
+                color: Colors.black.withOpacity(0.12),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
             ],
           ),
           child: Stack(
@@ -280,7 +275,8 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: navy,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     elevation: 8,
                   ),
                   child: Row(
@@ -288,11 +284,14 @@ class _HomeAdminPageState extends State<HomeAdminPage> {
                     children: const [
                       Icon(Icons.add, color: Colors.white, size: 22),
                       SizedBox(width: 10),
-                      Text('Tambah Pengguna',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700)),
+                      Text(
+                        'Tambah Pengguna',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ],
                   ),
                 ),

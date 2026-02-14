@@ -1,5 +1,3 @@
-// lib/page/perawat/inap/cppt.dart
-
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -37,9 +35,8 @@ class _CpptTambahanState extends State<CpptTambahan> {
   static const buttonUpdate = Color(0xFF007BFF);
 
   Map<String, dynamic>? _cpptData;
-  bool _isLoading = false;
-  // MODIFIED: State _isPostingIntervensi dihapus karena tidak ada lagi proses post di halaman ini.
-  bool _isUpdating = false;
+  bool _isLoading = false; // Untuk fetch awal
+  bool _isUpdating = false; // Untuk proses simpan/update
   String? _error;
 
   late final TextEditingController _subjectiveController;
@@ -125,8 +122,9 @@ class _CpptTambahanState extends State<CpptTambahan> {
         String msg = resp.body;
         try {
           final parsed = jsonDecode(resp.body);
-          if (parsed is Map && parsed['message'] != null)
+          if (parsed is Map && parsed['message'] != null) {
             msg = parsed['message'].toString();
+          }
         } catch (_) {}
         setState(() {
           _error = 'Gagal mengambil CPPT: ${resp.statusCode} - $msg';
@@ -200,11 +198,7 @@ class _CpptTambahanState extends State<CpptTambahan> {
     }
   }
 
-  // --- MODIFIED: Fungsi untuk navigasi ke halaman Intervensi ---
-  // Fungsi _postIntervensi() dihapus dan diganti dengan fungsi ini.
   void _goToIntervensiPage() {
-    // Tidak ada lagi proses POST di sini.
-    // Langsung navigasi ke halaman IntervensiInap dengan membawa data yang diperlukan.
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -214,8 +208,6 @@ class _CpptTambahanState extends State<CpptTambahan> {
           perawatId: widget.perawatId,
           query: widget.query,
           cpptId: widget.cpptId,
-          // Anda mungkin perlu meneruskan data lain ke halaman IntervensiInap,
-          // misalnya data dari controller S-O-A-P jika dibutuhkan di sana.
         ),
       ),
     );
@@ -288,10 +280,14 @@ class _CpptTambahanState extends State<CpptTambahan> {
       );
     }
 
+    // Tampilkan loading biasa (bukan overlay) untuk initial fetch
+    // karena datanya belum ada.
     if (_isLoading) return const Center(child: CircularProgressIndicator());
+
     if (_error != null) return Center(child: Text(_error!));
-    if (_cpptData == null)
+    if (_cpptData == null) {
       return const Center(child: Text('Tidak ada data CPPT'));
+    }
 
     final d = _cpptData!;
 
@@ -385,56 +381,9 @@ class _CpptTambahanState extends State<CpptTambahan> {
     );
   }
 
-  Widget _buildLoadingButton({
-    required bool isLoading,
-    required VoidCallback? onPressed,
-    required String text,
-    required String loadingText,
-    required Color color,
-  }) {
-    return SizedBox(
-      height: 52,
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          elevation: 0,
-        ),
-        child: isLoading
-            ? Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 24,
-                    height: 24,
-                    padding: const EdgeInsets.all(2.0),
-                    child: const CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 3,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(loadingText),
-                ],
-              )
-            : Text(
-                text,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
-                ),
-              ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    // MODIFIED: _isPostingIntervensi dihapus dari kondisi ini
+    // Variable untuk mengunci tombol jika sedang loading
     final bool isActionInProgress = _isLoading || _isUpdating;
 
     return Scaffold(
@@ -447,7 +396,23 @@ class _CpptTambahanState extends State<CpptTambahan> {
         ),
         backgroundColor: const Color(0xFFD7E2FD),
       ),
-      body: SafeArea(child: _buildBody()),
+      // --- WRAP DENGAN STACK UNTUK OVERLAY ---
+      body: Stack(
+        children: [
+          // Layer 1: Konten Utama
+          SafeArea(child: _buildBody()),
+
+          // Layer 2: Loading Overlay (Hanya muncul saat sedang Update/Simpan)
+          // (Initial loading _isLoading sudah ditangani di dalam _buildBody untuk mengganti konten)
+          if (_isUpdating)
+            Container(
+              color: Colors.black.withOpacity(0.5),
+              child: const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
+            ),
+        ],
+      ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(20, 8, 20, 18),
         child: Padding(
@@ -455,21 +420,35 @@ class _CpptTambahanState extends State<CpptTambahan> {
           child: Row(
             children: [
               Expanded(
-                child: _buildLoadingButton(
-                  isLoading: _isUpdating,
-                  onPressed: isActionInProgress ? null : _updateCppt,
-                  text: 'Simpan Perubahan',
-                  loadingText: 'Menyimpan...',
-                  color: buttonUpdate,
+                child: SizedBox(
+                  height: 52,
+                  child: ElevatedButton(
+                    // Disable button saat proses berjalan
+                    onPressed: isActionInProgress ? null : _updateCppt,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: buttonUpdate,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Simpan Perubahan',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                // MODIFIED: Tombol ini sekarang tidak lagi menampilkan loading
-                // karena hanya berfungsi sebagai tombol navigasi.
                 child: SizedBox(
                   height: 52,
                   child: ElevatedButton(
+                    // Disable button saat proses berjalan
                     onPressed: isActionInProgress ? null : _goToIntervensiPage,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: buttonIntervensi,

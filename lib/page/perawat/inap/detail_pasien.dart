@@ -1,12 +1,16 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:vocare/common/type.dart';
+import 'package:vocare/page/perawat/inap/Detail/askep.dart';
 import 'package:vocare/page/perawat/inap/detail/assesments.dart';
 import 'package:vocare/page/perawat/inap/detail/cppt_list.dart';
-import 'package:vocare/page/perawat/inap/detail/intervensi_list.dart' as detailIntervensi;
-import 'package:vocare/page/perawat/inap/detail/riwayat_laporan.dart'; 
+import 'package:vocare/page/perawat/inap/detail/intervensi_list.dart'
+    as detailIntervensi;
 import 'package:vocare/page/perawat/inap/voice.dart';
 
-class PatientDetailPage extends StatelessWidget {
+class PatientDetailPage extends StatefulWidget {
   final Map<String, dynamic> patientData;
   final User user;
 
@@ -17,11 +21,65 @@ class PatientDetailPage extends StatelessWidget {
   });
 
   @override
+  State<PatientDetailPage> createState() => _PatientDetailPageState();
+}
+
+class _PatientDetailPageState extends State<PatientDetailPage> {
+  Future<int?> _fetchAssessmentId(int patientId) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final baseUrl = dotenv.env['API_BASE_URL'] ?? dotenv.env['API_URL'] ?? '';
+
+      final url = Uri.parse('$baseUrl/assesments?patient_id=$patientId');
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer ${widget.user.token}',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      );
+
+      if (mounted) Navigator.of(context).pop();
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final Map<String, dynamic> jsonResponse = jsonDecode(response.body);
+        final List<dynamic> dataList = jsonResponse['data'] ?? [];
+
+        if (dataList.isNotEmpty) {
+          final specificAssessment = dataList.firstWhere(
+            (element) => element['patient_id'] == patientId,
+            orElse: () => null,
+          );
+
+          if (specificAssessment != null) {
+            return specificAssessment['id'];
+          }
+        }
+      } else {
+        debugPrint(
+          'Gagal mengambil assessment ID. Status: ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      if (mounted && Navigator.canPop(context)) Navigator.of(context).pop();
+      debugPrint('Error fetching assessment ID: $e');
+    }
+    return null;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final String nama = patientData['nama'] ?? 'Tanpa Nama';
-    final String noRm = patientData['no_rekam_medis'] ?? '-';
-    final int patientId = patientData['id'] ?? 0;
-    final assessmentId = patientData['id_assesment'];
+    final String nama = widget.patientData['nama'] ?? 'Tanpa Nama';
+    final String noRm = widget.patientData['no_rekam_medis'] ?? '-';
+
+    final int patientId = widget.patientData['id'] ?? 0;
 
     final Color navyColor = const Color(0xFF082B54);
     final ButtonStyle buttonStyle = ElevatedButton.styleFrom(
@@ -34,9 +92,12 @@ class PatientDetailPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text("Detail Pasien", style: TextStyle(color: Colors.white)),
+        title: const Text(
+          "Detail Pasien",
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: navyColor,
-        iconTheme: IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       backgroundColor: Colors.white,
       body: SingleChildScrollView(
@@ -45,6 +106,7 @@ class PatientDetailPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Card Informasi Pasien
               Card(
                 color: Colors.white,
                 elevation: 4,
@@ -77,31 +139,43 @@ class PatientDetailPage extends StatelessWidget {
               ),
               const SizedBox(height: 24),
 
-              // Tombol Navigasi
               ElevatedButton(
                 style: buttonStyle,
-                onPressed: () {
-                  if (assessmentId != null && assessmentId is int) {
+                onPressed: () async {
+                  if (patientId == 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('ID Pasien tidak valid')),
+                    );
+                    return;
+                  }
+                  final int? assessmentId = await _fetchAssessmentId(patientId);
+
+                  if (assessmentId != null && mounted) {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (context) => AssesmentsInap(
                           assessmentId: assessmentId,
-                          token: user.token,
+                          token: widget.user.token,
                         ),
                       ),
                     );
-                  } else {
+                  } else if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('ID Assessment tidak valid.'),
-                        backgroundColor: Colors.red,
+                        content: Text(
+                          'Data Assessment belum tersedia untuk pasien ini.',
+                        ),
+                        backgroundColor: Colors.orange,
                       ),
                     );
                   }
                 },
                 child: const Text('Lihat Assesments'),
               ),
+
               const SizedBox(height: 12),
+
+              // Tombol Lihat CPPT
               ElevatedButton(
                 style: buttonStyle,
                 onPressed: () {
@@ -111,7 +185,7 @@ class PatientDetailPage extends StatelessWidget {
                         builder: (context) => CpptListPage(
                           patientId: patientId,
                           patientName: nama,
-                          user: user,
+                          user: widget.user,
                         ),
                       ),
                     );
@@ -119,38 +193,47 @@ class PatientDetailPage extends StatelessWidget {
                 },
                 child: const Text('Lihat CPPT'),
               ),
+
               const SizedBox(height: 12),
+
+              // Tombol Lihat Intervensi
               ElevatedButton(
                 style: buttonStyle,
                 onPressed: () {
                   if (patientId != 0) {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (context) => detailIntervensi.IntervensiListPage(
-                          patientId: patientId,
-                          patientName: nama,
-                          user: user,
-                        ),
+                        builder: (context) =>
+                            detailIntervensi.IntervensiListPage(
+                              patientId: patientId,
+                              patientName: nama,
+                              user: widget.user,
+                            ),
                       ),
                     );
                   }
                 },
                 child: const Text('Lihat Intervensi'),
               ),
+
               const SizedBox(height: 12),
+
               ElevatedButton(
                 style: buttonStyle,
                 onPressed: () {
                   if (patientId != 0) {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (context) => DaftarRiwayatPage(
-                          user: user,
-                          patientId: patientId.toString(),
+                        builder: (context) => AskepViewPage(
+                          patientId: patientId,
                           patientName: nama,
-                          noRekamMedis: noRm,
+                          user: widget.user,
                         ),
                       ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('ID Pasien tidak valid')),
                     );
                   }
                 },
@@ -168,9 +251,8 @@ class PatientDetailPage extends StatelessWidget {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => VoicePageLaporanTambahan(
-                    user: user,
+                    user: widget.user,
                     patientId: patientId.toString(),
-                    
                   ),
                 ),
               );
@@ -182,18 +264,13 @@ class PatientDetailPage extends StatelessWidget {
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
           ),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(
-              0xFF093275,
-            ), 
+            backgroundColor: const Color(0xFF093275),
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
             elevation: 0,
-            minimumSize: const Size(
-              double.infinity,
-              56,
-            ), 
+            minimumSize: const Size(double.infinity, 56),
           ),
         ),
       ),
