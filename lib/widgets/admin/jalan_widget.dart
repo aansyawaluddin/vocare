@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:vocare/common/type.dart';
 import 'package:vocare/page/admin/riwayat_laporan.dart';
 
@@ -26,10 +29,23 @@ class PasienJalanAdminWidget extends StatefulWidget {
 
 class _PasienJalanWidgetState extends State<PasienJalanAdminWidget> {
   String? _selectedRoom;
+  // Menyimpan data pasien secara lokal agar bisa diupdate/dihapus langsung di UI
+  late List<Map<String, dynamic>> _localPatients;
 
   @override
   void initState() {
     super.initState();
+    // Salin data dari parent ke state lokal
+    _localPatients = List<Map<String, dynamic>>.from(widget.inpatients);
+  }
+
+  // Update local data jika parent mengirim data baru
+  @override
+  void didUpdateWidget(covariant PasienJalanAdminWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.inpatients != oldWidget.inpatients) {
+      _localPatients = List<Map<String, dynamic>>.from(widget.inpatients);
+    }
   }
 
   bool get _isKetua {
@@ -39,14 +55,94 @@ class _PasienJalanWidgetState extends State<PasienJalanAdminWidget> {
 
   List<Map<String, dynamic>> get _visiblePatients {
     if (_selectedRoom == null || _selectedRoom == 'Semua Ruangan') {
-      return widget.inpatients;
+      return _localPatients;
     }
 
     final selectedLower = _selectedRoom!.toLowerCase();
-    return widget.inpatients
-        .where((p) =>
-            (p['room'] ?? '').toString().toLowerCase() == selectedLower)
+    return _localPatients
+        .where(
+          (p) => (p['room'] ?? '').toString().toLowerCase() == selectedLower,
+        )
         .toList();
+  }
+
+  // <-- FUNGSI PINDAH KE RAWAT INAP (PUT) -->
+  Future<bool> _changeStatusToInap(String patientId) async {
+    final baseUrl = dotenv.env['API_URL'] ?? '';
+    if (baseUrl.isEmpty) {
+      debugPrint('API_URL belum di-set di .env');
+      return false;
+    }
+
+    final url = Uri.parse('$baseUrl/patients/$patientId');
+    // Mengubah status menjadi rawat inap
+    final body = jsonEncode({'status_rawat': 'rawat_inap'});
+
+    try {
+      final resp = await http.put(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${widget.user.token}',
+        },
+        body: body,
+      );
+
+      if (resp.statusCode >= 200 && resp.statusCode < 300) {
+        if (mounted) {
+          setState(() {
+            // Hapus dari daftar rawat jalan secara lokal
+            _localPatients.removeWhere(
+              (p) => (p['id'] ?? '').toString() == patientId,
+            );
+          });
+        }
+        return true;
+      } else {
+        debugPrint('Gagal update status: ${resp.statusCode} ${resp.body}');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Error saat memanggil API: $e');
+      return false;
+    }
+  }
+
+  // <-- FUNGSI HAPUS PASIEN (DELETE) -->
+  Future<bool> _deletePatient(String patientId) async {
+    final baseUrl = dotenv.env['API_URL'] ?? dotenv.env['API_BASE_URL'] ?? '';
+    if (baseUrl.isEmpty) {
+      debugPrint('API URL belum di-set di .env');
+      return false;
+    }
+
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/patients/$patientId'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer ${widget.user.token}',
+        },
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        if (mounted) {
+          setState(() {
+            // Hapus dari daftar secara lokal
+            _localPatients.removeWhere(
+              (p) => (p['id'] ?? '').toString() == patientId,
+            );
+          });
+        }
+        return true;
+      } else {
+        debugPrint('Gagal menghapus pasien: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('Terjadi kesalahan saat hapus: $e');
+      return false;
+    }
   }
 
   @override
@@ -81,7 +177,6 @@ class _PasienJalanWidgetState extends State<PasienJalanAdminWidget> {
             ),
           )
         else
-          // Ganti SizedBox(height: 500) jadi Expanded agar mengambil sisa ruang Column
           Expanded(
             child: ListView.builder(
               padding: EdgeInsets.zero,
@@ -103,6 +198,8 @@ class _PasienJalanWidgetState extends State<PasienJalanAdminWidget> {
                     jenisKelamin: p['jenis_kelamin']?.toString() ?? '-',
                     statusRawat: p['status_rawat']?.toString() ?? '-',
                     isCompact: isCompact,
+                    onMoveToInpatient: () => _confirmMoveToInpatient(id, nama),
+                    onDelete: () => _confirmDelete(id, nama),
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
@@ -123,6 +220,101 @@ class _PasienJalanWidgetState extends State<PasienJalanAdminWidget> {
       ],
     );
   }
+
+  // --- DIALOG KONFIRMASI PINDAH RAWAT INAP ---
+  void _confirmMoveToInpatient(String id, String nama) async {
+    final pageContext = context;
+    final confirm = await showDialog<bool>(
+      context: pageContext,
+      builder: (c) => AlertDialog(
+        title: const Text('Konfirmasi Pindah'),
+        content: Text('Pindahkan pasien "$nama" ke Rawat Inap?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(c).pop(false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(c).pop(true),
+            child: const Text('Ya, Pindahkan'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    showDialog(
+      context: pageContext,
+      barrierDismissible: false,
+      builder: (c) => const Center(child: CircularProgressIndicator()),
+    );
+
+    final success = await _changeStatusToInap(id);
+
+    if (!mounted) return;
+    Navigator.of(pageContext, rootNavigator: true).pop(); // Tutup loading
+
+    ScaffoldMessenger.of(pageContext).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? 'Pasien berhasil dipindahkan ke Rawat Inap.'
+              : 'Gagal memindahkan pasien.',
+        ),
+        backgroundColor: success ? Colors.green : Colors.red,
+      ),
+    );
+  }
+
+  // --- DIALOG KONFIRMASI HAPUS ---
+  void _confirmDelete(String id, String nama) async {
+    final pageContext = context;
+    final confirm = await showDialog<bool>(
+      context: pageContext,
+      builder: (c) => AlertDialog(
+        title: const Text('Konfirmasi Hapus'),
+        content: Text(
+          'Apakah Anda yakin ingin menghapus data pasien "$nama"? Tindakan ini tidak dapat dibatalkan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(c).pop(false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(c).pop(true),
+            child: const Text('Hapus', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    showDialog(
+      context: pageContext,
+      barrierDismissible: false,
+      builder: (c) => const Center(child: CircularProgressIndicator()),
+    );
+
+    final success = await _deletePatient(id);
+
+    if (!mounted) return;
+    Navigator.of(pageContext, rootNavigator: true).pop(); // Tutup loading
+
+    ScaffoldMessenger.of(pageContext).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? 'Data pasien berhasil dihapus.'
+              : 'Gagal menghapus data pasien.',
+        ),
+        backgroundColor: success ? Colors.green : Colors.red,
+      ),
+    );
+  }
 }
 
 class InpatientCard extends StatelessWidget {
@@ -136,6 +328,8 @@ class InpatientCard extends StatelessWidget {
     required this.statusRawat,
     this.isCompact = false,
     this.onTap,
+    this.onDelete,
+    this.onMoveToInpatient,
   });
 
   final Color navy;
@@ -146,10 +340,13 @@ class InpatientCard extends StatelessWidget {
   final String statusRawat;
   final bool isCompact;
   final VoidCallback? onTap;
+  final VoidCallback? onDelete;
+  final VoidCallback? onMoveToInpatient;
 
   @override
   Widget build(BuildContext context) {
-    final cardHeight = isCompact ? 100.0 : 120.0;
+    // Sedikit diperbesar agar teks dan ikon memiliki ruang bernapas yang lega
+    final cardHeight = isCompact ? 110.0 : 125.0;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,45 +374,106 @@ class InpatientCard extends StatelessWidget {
               color: cardBlue,
               child: InkWell(
                 onTap: onTap,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 12,
-                    horizontal: 14,
-                  ),
+                child: SizedBox(
                   height: cardHeight,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Stack(
                     children: [
-                      Text(
-                        'No. RM : $noRekamMedis',
-                        style: TextStyle(
-                          color: navy,
-                          fontWeight: FontWeight.w700,
-                          fontSize: isCompact ? 12 : 13,
+                      // --- BAGIAN TEKS INFORMASI ---
+                      Positioned(
+                        left: 14,
+                        top: 12,
+                        bottom: 12,
+                        // Sisakan ruang 50px di kanan agar teks tidak menabrak ikon
+                        right: 50,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'No. RM : $noRekamMedis',
+                              style: TextStyle(
+                                color: navy,
+                                fontWeight: FontWeight.w700,
+                                fontSize: isCompact ? 12 : 13,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Nama : $nama',
+                              style: TextStyle(
+                                color: navy.withOpacity(0.95),
+                                fontSize: isCompact ? 11 : 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              'Jenis Kelamin : $jenisKelamin',
+                              style: TextStyle(
+                                color: navy.withOpacity(0.95),
+                                fontSize: isCompact ? 11 : 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              'Status Rawat : $statusRawat',
+                              style: TextStyle(
+                                color: navy.withOpacity(0.9),
+                                fontSize: isCompact ? 11 : 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Nama : $nama',
-                        style: TextStyle(
-                          color: navy.withOpacity(0.95),
-                          fontSize: isCompact ? 11 : 12,
+
+                      // --- TOMBOL PINDAH INAP (POJOK KANAN ATAS) ---
+                      if (onMoveToInpatient != null)
+                        Positioned(
+                          right: 24, // Jarak dari tepi panah
+                          top: 8,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: onMoveToInpatient,
+                              borderRadius: BorderRadius.circular(20),
+                              child: Padding(
+                                padding: const EdgeInsets.all(6.0),
+                                child: Icon(
+                                  Icons.hotel,
+                                  color: navy,
+                                  size: isCompact ? 22 : 24,
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                      Text(
-                        'Jenis Kelamin : $jenisKelamin',
-                        style: TextStyle(
-                          color: navy.withOpacity(0.95),
-                          fontSize: isCompact ? 11 : 12,
+
+                      // --- TOMBOL HAPUS (POJOK KANAN BAWAH) ---
+                      if (onDelete != null)
+                        Positioned(
+                          right: 24,
+                          bottom: 8,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: onDelete,
+                              borderRadius: BorderRadius.circular(20),
+                              child: Padding(
+                                padding: const EdgeInsets.all(6.0),
+                                child: Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.red[700],
+                                  size: isCompact ? 22 : 24,
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                      Text(
-                        'Status Rawat : $statusRawat',
-                        style: TextStyle(
-                          color: navy.withOpacity(0.9),
-                          fontSize: isCompact ? 11 : 12,
-                        ),
-                      ),
                     ],
                   ),
                 ),

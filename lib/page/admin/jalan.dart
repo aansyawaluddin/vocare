@@ -81,7 +81,6 @@ class _PasienJalanAdminState extends State<PasienJalanAdmin> {
         debugPrint('patientMaps[0] raw: ${patientMaps[0].toString()}');
       }
 
-      // <-- FILTER HANYA UNTUK RAWAT JALAN (mengatasi variasi penulisan)
       final jalanPatients = patientMaps.where((p) {
         final status =
             (p['status_rawat'] ?? p['statusRawat'] ?? p['status'] ?? '')
@@ -176,11 +175,10 @@ class _PasienJalanAdminState extends State<PasienJalanAdmin> {
     }
 
     if (_inpatientsForUI.isEmpty) {
-      // ubah pesan agar sesuai konteks rawat jalan
+
       return const Center(child: Text('Belum ada data pasien rawat jalan.'));
     }
 
-    // <-- Ganti menjadi LayoutBuilder + SizedBox supaya child mendapat height yang jelas
     return LayoutBuilder(
       builder: (context, constraints) {
         return SizedBox(
